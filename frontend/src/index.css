@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Plus Jakarta Sans: editorial, premium SaaS */
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Zinc neutrals + indigo accent — polished light / dark */
+:root {
+  --color-page: #fafafa;
+  --color-page-accent: radial-gradient(
+    ellipse 90% 60% at 50% -25%,
+    rgba(99, 102, 241, 0.09),
+    transparent 55%
+  );
+  --color-surface: #ffffff;
+  --color-surface-elevated: #f4f4f5;
+  --color-input: #ffffff;
+  --color-primary: #4338ca;
+  --color-primary-hover: #3730a3;
+  --color-primary-soft: rgba(67, 56, 202, 0.08);
+  --color-ink: #18181b;
+  --color-muted: #71717a;
+  --color-border: #e4e4e7;
+  --color-border-strong: #a1a1aa;
+  --color-badge-1-bg: #eef2ff;
+  --color-badge-1-text: #3730a3;
+  --color-badge-2-bg: #f4f4f5;
+  --color-badge-2-text: #52525b;
+  --color-badge-2-ring: #d4d4d8;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-danger-text: #991b1b;
+  --color-warn-bg: #fffbeb;
+  --color-warn-border: #fde68a;
+  --color-warn-text: #92400e;
+  --color-code-bg: #f4f4f5;
+  --color-preview-bg: #09090b;
+  --color-preview-text: #e4e4e7;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -4px rgba(0, 0, 0, 0.08);
+  --shadow-elevated: 0 24px 48px -12px rgba(0, 0, 0, 0.12);
+}
+
+.dark {
+  --color-page: #09090b;
+  --color-page-accent: radial-gradient(
+    ellipse 90% 60% at 50% -25%,
+    rgba(99, 102, 241, 0.15),
+    transparent 55%
+  );
+  --color-surface: #18181b;
+  --color-surface-elevated: #27272a;
+  --color-input: #27272a;
+  --color-primary: #818cf8;
+  --color-primary-hover: #a5b4fc;
+  --color-primary-soft: rgba(129, 140, 248, 0.12);
+  --color-ink: #fafafa;
+  --color-muted: #a1a1aa;
+  --color-border: #3f3f46;
+  --color-border-strong: #71717a;
+  --color-badge-1-bg: rgba(99, 102, 241, 0.15);
+  --color-badge-1-text: #c7d2fe;
+  --color-badge-2-bg: #27272a;
+  --color-badge-2-text: #d4d4d8;
+  --color-badge-2-ring: #52525b;
+  --color-danger-bg: rgba(127, 29, 29, 0.35);
+  --color-danger-border: #b91c1c;
+  --color-danger-text: #fecaca;
+  --color-warn-bg: rgba(120, 53, 15, 0.4);
+  --color-warn-border: #d97706;
+  --color-warn-text: #fef3c7;
+  --color-code-bg: #27272a;
+  --color-preview-bg: #020203;
+  --color-preview-text: #d4d4d8;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px -4px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 24px 48px -12px rgba(0, 0, 0, 0.45);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  @apply min-h-screen font-sans text-[length:15px] leading-relaxed text-[var(--color-ink)] antialiased transition-colors duration-300;
+  background-color: var(--color-page);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--color-page-accent);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  @apply bg-indigo-200/80 text-indigo-950;
+}
+
+.dark ::selection {
+  @apply bg-indigo-500/40 text-white;
+}
+
+/* Subtle grid for depth */
+.ui-grid-bg {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.055) 1px,
+    transparent 0
+  );
+  background-size: 28px 28px;
+}
+
+.dark .ui-grid-bg {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 0
+  );
+}
