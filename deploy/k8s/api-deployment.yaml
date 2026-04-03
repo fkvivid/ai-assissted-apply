@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: ai-assisted-apply
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-assisted-apply
+      component: api
+  template:
+    metadata:
+      labels:
+        app: ai-assisted-apply
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: ai-assisted-apply-api:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 10001
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-assisted-apply-secrets
+                  key: openai-api-key
+            - name: OPENAI_MODEL
+              value: "best"
+            - name: CORS_ORIGINS
+              value: "http://localhost:8080,https://apply.example.com"
+            - name: PDF_REMOTE_COMPILE_URL
+              value: ""
+            - name: HOME
+              value: /home/appuser
+            - name: TMPDIR
+              value: /tmp
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 10

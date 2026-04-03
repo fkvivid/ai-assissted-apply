@@ -1,0 +1,19 @@
+# Set your registry once, then: kubectl apply -k deploy/k8s
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ai-assisted-apply
+resources:
+  - namespace.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+  # Uncomment when you have an ingress controller:
+  # - ingress.yaml
+images:
+  - name: ai-assisted-apply-api
+    newName: docker.io/CHANGE_ME/ai-assisted-apply-api
+    newTag: latest
+  - name: ai-assisted-apply-web
+    newName: docker.io/CHANGE_ME/ai-assisted-apply-web
+    newTag: latest

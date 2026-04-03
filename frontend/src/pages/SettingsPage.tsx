@@ -120,23 +120,6 @@ export function SettingsPage() {
           <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-muted)]">
             Paste your current resume text.
           </p>
-          <div className="mt-5">
-            <label
-              htmlFor="profile-name"
-              className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]"
-            >
-              Your name (PDF filename)
-            </label>
-            <input
-              id="profile-name"
-              type="text"
-              value={draft.userName}
-              onChange={(e) => updateDraft({ userName: e.target.value })}
-              placeholder="e.g. Jane Smith → Jane_Smith_resume.pdf"
-              autoComplete="name"
-              className="mt-2 w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-input)] px-4 py-2.5 text-[14px] text-[var(--color-ink)] placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:placeholder:text-zinc-500"
-            />
-          </div>
           <textarea
             value={draft.resume}
             onChange={(e) => updateDraft({ resume: e.target.value })}
@@ -145,6 +128,34 @@ export function SettingsPage() {
             className="mt-5 w-full resize-y rounded-2xl border border-[var(--color-border)] bg-[var(--color-input)] px-4 py-3 text-[14px] leading-relaxed text-[var(--color-ink)] placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:placeholder:text-zinc-500"
             spellCheck
           />
+          <div className="mt-8 border-t border-[var(--color-border)]/70 pt-6">
+            <label
+              htmlFor="profile-name"
+              className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]"
+            >
+              PDF download name
+            </label>
+            <p className="mt-1.5 max-w-xl text-[12px] leading-relaxed text-[var(--color-muted)]">
+              Optional. Used for the file when you download a PDF from Home (e.g.{" "}
+              <span className="font-mono text-[11px] text-[var(--color-ink)]">
+                Jane_Smith_resume.pdf
+              </span>
+              ). Spaces become underscores; leave blank for{" "}
+              <span className="font-mono text-[11px] text-[var(--color-ink)]">
+                resume.pdf
+              </span>
+              .
+            </p>
+            <input
+              id="profile-name"
+              type="text"
+              value={draft.userName}
+              onChange={(e) => updateDraft({ userName: e.target.value })}
+              placeholder="Jane Smith"
+              autoComplete="name"
+              className="mt-3 w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-input)] px-4 py-2.5 text-[14px] text-[var(--color-ink)] placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:placeholder:text-zinc-500"
+            />
+          </div>
         </section>
 
         <div className="hidden lg:block">

@@ -2,7 +2,6 @@
 # Extra Debian packages cover Charter (bchr8t) for the default template.
 FROM pandoc/latex:latest-ubuntu
 
-# Base image sets ENTRYPOINT to pandoc; we run uvicorn/Python instead.
 ENTRYPOINT []
 
 USER root
@@ -27,6 +26,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY scripts ./scripts
 
-ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

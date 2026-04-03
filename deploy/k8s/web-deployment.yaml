@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: ai-assisted-apply
+    component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-assisted-apply
+      component: web
+  template:
+    metadata:
+      labels:
+        app: ai-assisted-apply
+        component: web
+    spec:
+      containers:
+        - name: web
+          image: ai-assisted-apply-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10

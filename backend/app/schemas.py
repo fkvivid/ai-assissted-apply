@@ -23,6 +23,12 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     latex: str
     model: str
+    match_percent: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Estimated job-description alignment (0–100); null if unscored",
+    )
 
 
 class CompilePdfRequest(BaseModel):

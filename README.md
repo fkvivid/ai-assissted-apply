@@ -29,9 +29,10 @@ Open-source web app to **tailor your resume to a specific job** using your own *
 | **Linux / Unix** | [**TeX Live**](https://www.tug.org/texlive/) | Use your distro packages or the official installer; ensure `pdflatex` works (`which pdflatex`). |
 | **Windows** | [**MiKTeX**](https://miktex.org/) or **TeX Live** | Install so `pdflatex` is available in the environment where you run the API. |
 
-**Two supported setups:**
+**Three supported setups:**
 
-- **Docker Compose** — Single **`api`** service built from **[`pandoc/latex:latest-ubuntu`](https://hub.docker.com/r/pandoc/latex)** plus Python and **`texlive-fonts-extra`** so **`pdflatex`** runs inside the same container (no separate PDF microservice).
+- **Docker Compose (recommended for self-hosting)** — **`web`** (nginx + built SPA) on port **8080** proxies `/api` to **`api`** (FastAPI + TeX Live). One command: `docker compose up --build -d`, then open [http://localhost:8080](http://localhost:8080). Push images with `IMAGE_PREFIX=yourdockeruser/ docker compose build && docker compose push`. **Kubernetes:** see [deploy/k8s/README.md](./deploy/k8s/README.md).
+- **Docker Compose API only** — Run **`api`** alone (port 8000) and use `npm run dev` for the UI if you prefer.
 - **Native Python (no container)** — Install **MacTeX** / **TeX Live** / **MiKTeX** so **`pdflatex`** is on your `PATH`. Leave **`PDF_REMOTE_COMPILE_URL`** unset unless you use a remote compile service.
 
 ## Local development
@@ -69,32 +70,55 @@ npm run build
 
 Output is in `frontend/dist/`.
 
-### 4. Run the API in Docker ([`pandoc/latex`](https://hub.docker.com/r/pandoc/latex) + Python)
+### 4. Run everything in Docker (UI + API)
 
-From the repo root (copy `backend/.env.example` to `backend/.env` and set `OPENAI_API_KEY`):
+From the repo root, copy `backend/.env.example` to `backend/.env` and set **`OPENAI_API_KEY`**.
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-The **`api`** image extends **[`pandoc/latex:latest-ubuntu`](https://hub.docker.com/r/pandoc/latex)** (maintained TeX Live for PDF), adds **Python** in a venv, and **`texlive-fonts-extra`** for Charter in the default template. FastAPI listens on **8000**; PDF compilation uses **`pdflatex`** in-process (`PDF_REMOTE_COMPILE_URL` is empty by default).
+Open **[http://localhost:8080](http://localhost:8080)** (override with `WEB_PORT=80` if you want host port 80 mapped to container **8080**).
+
+- **Network:** Compose attaches **`api`** and **`web`** to a named bridge network **`ai-assisted-apply_net`** (DNS name **`api`** for the backend). No extra volumes on **`api`**: LaTeX uses normal **`/tmp`** and **`$HOME`** inside the container (fast, stateless across restarts).
+- **`api`** image: **[`pandoc/latex:latest-ubuntu`](https://hub.docker.com/r/pandoc/latex)** + Python; runs as **`appuser` (uid 10001)**. Dockerfiles use **BuildKit cache mounts** for faster rebuilds (`pip` / `npm`).
+- **`web`** image: multi-stage Node build → unprivileged **nginx** on **8080**, proxying **`/api`** to **`http://api:8000`** (same pattern as in Kubernetes).
+
+**Push to Docker Hub (or any registry) for Kubernetes / CI:**
+
+```bash
+export IMAGE_PREFIX=yourdockeruser/   # e.g. docker.io/janedoe/ or ghcr.io/org/
+docker compose build
+docker login
+docker compose push
+```
+
+Images are tagged **`${IMAGE_PREFIX}ai-assisted-apply-api:${TAG:-latest}`** and **`${IMAGE_PREFIX}ai-assisted-apply-web:${TAG:-latest}`** (`TAG` optional).
 
 **Sanity-check the default template:**
 
 ```bash
-docker compose exec api python scripts/verify_default_template_pdf.py
+docker compose exec api /opt/venv/bin/python scripts/verify_default_template_pdf.py
 ```
 
 Expect `OK — default template PDF: … bytes`. If that passes but a tailored resume fails, the generated LaTeX is usually invalid — edit the source or regenerate.
+
+**Homelab Kubernetes:** edit image names in [deploy/k8s/kustomization.yaml](./deploy/k8s/kustomization.yaml), create the secret per [deploy/k8s/README.md](./deploy/k8s/README.md), then `kubectl apply -k deploy/k8s`.
 
 ## Configuration
 
 | Variable | Description |
 |----------|-------------|
 | `OPENAI_API_KEY` | **Required** for generation. Set in `backend/.env` or the environment. |
-| `OPENAI_MODEL` | Defaults to `gpt-4o-mini`. |
-| `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API. |
+| `OPENAI_MODEL` | Chat model for resume tailoring (default `gpt-4o-mini`). |
+| `OPENAI_MATCH_MODEL` | Model for **job match %** after tailoring (default `gpt-4o-mini`). Leave **empty** to skip scoring (no second API call). |
+| `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API. Docker Compose sets defaults that include localhost (dev + **`web`** on 8080). |
 | `PDF_REMOTE_COMPILE_URL` | Optional. If set, the API POSTs the `.tex` to this URL (multipart field `latex`) instead of local `pdflatex`. **Default empty** in Docker Compose (compile inside the `pandoc/latex`-based image). |
+| `IMAGE_PREFIX` | Optional. Docker Compose image prefix for registry push (e.g. `youruser/` or `ghcr.io/org/`). |
+| `TAG` | Optional image tag (default `latest`). |
+| `WEB_PORT` | Host port mapped to the **`web`** container (default **8080** → container **8080**). |
+| `API_HOST_PORT` | Host port for direct **`api`** access (default **8000**). Use the **`web`** URL for the app; **8000** is for health checks and scripts such as `verify_default_template_pdf.py`. |
+| (Compose) | Network **`ai-assisted-apply_net`** only — no backend volume by default. |
 
 ## License
 

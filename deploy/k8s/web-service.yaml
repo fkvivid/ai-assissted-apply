@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app: ai-assisted-apply
+    component: web
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-assisted-apply
+    component: web
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http
