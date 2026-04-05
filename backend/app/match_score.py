@@ -1,4 +1,4 @@
-"""Estimate job ↔ tailored resume alignment as a single 0–100 score (LLM)."""
+"""Estimate job ↔ resume alignment as a single 0–100 score (LLM)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import re
 from openai import OpenAI
 
 _MAX_JOB_CHARS = 14_000
-_MAX_LATEX_CHARS = 22_000
+_MAX_RESUME_CHARS = 22_000
 
 
 def _clamp(n: int) -> int:
@@ -30,28 +30,35 @@ def compute_job_resume_match_percent(
     *,
     model: str,
     job_description: str,
-    latex: str,
+    resume_text: str,
+    resume_label: str = "Resume",
+    ignore_latex_markup: bool = False,
 ) -> int | None:
     """Return 0–100 or None if the scorer call fails or is disabled."""
     model = model.strip()
     if not model:
         return None
     jd = job_description.strip()[:_MAX_JOB_CHARS]
-    lx = latex.strip()[:_MAX_LATEX_CHARS]
-    if not jd or not lx:
+    resume = resume_text.strip()[:_MAX_RESUME_CHARS]
+    if not jd or not resume:
         return None
 
+    substance_instruction = (
+        "Judge substance only—ignore LaTeX commands and markup. "
+        if ignore_latex_markup
+        else ""
+    )
     user = (
-        "Compare the job description to the tailored resume below (LaTeX). "
-        "Judge substance only—ignore LaTeX commands and markup. Consider "
+        "Compare the job description to the resume below. "
+        f"{substance_instruction}Consider "
         "required and preferred skills, tools, responsibilities, and overall "
         "fit for ATS and recruiter screening.\n\n"
         "Reply with exactly one line: a single integer from 0 to 100. "
         "No words, labels, or punctuation—digits only.\n\n"
         "## Job description\n"
         f"{jd}\n\n"
-        "## Resume (LaTeX)\n"
-        f"{lx}"
+        f"## {resume_label}\n"
+        f"{resume}"
     )
 
     try:

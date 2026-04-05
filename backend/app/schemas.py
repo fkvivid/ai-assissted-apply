@@ -29,6 +29,12 @@ class GenerateResponse(BaseModel):
         le=100,
         description="Estimated job-description alignment (0–100); null if unscored",
     )
+    original_match_percent: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Estimated original-resume job alignment (0–100); null if unscored",
+    )
 
 
 class CompilePdfRequest(BaseModel):
