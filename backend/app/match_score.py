@@ -8,6 +8,37 @@ from openai import OpenAI
 
 _MAX_JOB_CHARS = 14_000
 _MAX_RESUME_CHARS = 22_000
+_WORD_RE = re.compile(r"[a-z0-9][a-z0-9+.#/-]{1,}")
+_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "into",
+    "your",
+    "have",
+    "has",
+    "you",
+    "our",
+    "are",
+    "will",
+    "not",
+    "but",
+    "job",
+    "role",
+    "work",
+    "team",
+    "years",
+    "year",
+    "using",
+    "use",
+    "required",
+    "preferred",
+    "experience",
+}
 
 
 def _clamp(n: int) -> int:
@@ -23,6 +54,23 @@ def parse_match_percent(text: str) -> int | None:
         if 0 <= v <= 100:
             return _clamp(v)
     return None
+
+
+def _token_set(text: str) -> set[str]:
+    tokens = {m.group(0).lower() for m in _WORD_RE.finditer(text)}
+    return {t for t in tokens if t not in _STOPWORDS and len(t) >= 3}
+
+
+def _fallback_overlap_score(job_description: str, resume_text: str) -> int:
+    """Cheap lexical fallback so UI still gets a score when model scoring fails."""
+    job_tokens = _token_set(job_description)
+    resume_tokens = _token_set(resume_text)
+    if not job_tokens or not resume_tokens:
+        return 0
+    overlap = len(job_tokens & resume_tokens)
+    ratio = overlap / len(job_tokens)
+    # Map overlap to a practical ATS-style band; cap to avoid fake 100s.
+    return _clamp(int(round(20 + ratio * 70)))
 
 
 def compute_job_resume_match_percent(
@@ -78,7 +126,10 @@ def compute_job_resume_match_percent(
             max_tokens=16,
         )
     except Exception:
-        return None
+        return _fallback_overlap_score(jd, resume)
 
     raw = (completion.choices[0].message.content or "").strip()
-    return parse_match_percent(raw)
+    parsed = parse_match_percent(raw)
+    if parsed is not None:
+        return parsed
+    return _fallback_overlap_score(jd, resume)
