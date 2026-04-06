@@ -139,7 +139,7 @@ def generate(body: GenerateRequest) -> GenerateResponse:
 
     match_percent = compute_job_resume_match_percent(
         client,
-        model=settings.openai_match_model,
+        model=settings.openai_model,
         job_description=body.job_description.strip(),
         resume_text=latex,
         resume_label="Tailored resume (LaTeX)",
@@ -147,7 +147,7 @@ def generate(body: GenerateRequest) -> GenerateResponse:
     )
     original_match_percent = compute_job_resume_match_percent(
         client,
-        model=settings.openai_match_model,
+        model=settings.openai_model,
         job_description=body.job_description.strip(),
         resume_text=body.resume.strip(),
         resume_label="Original resume",

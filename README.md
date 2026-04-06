@@ -110,8 +110,7 @@ Expect `OK — default template PDF: … bytes`. If that passes but a tailored r
 | Variable | Description |
 |----------|-------------|
 | `OPENAI_API_KEY` | **Required** for generation. Set in `backend/.env` or the environment. |
-| `OPENAI_MODEL` | Chat model for resume tailoring (default `gpt-4o-mini`). |
-| `OPENAI_MATCH_MODEL` | Model for **job match %** after tailoring (default `gpt-4o-mini`). Leave **empty** to skip scoring (no second API call). |
+| `OPENAI_MODEL` | Model for resume tailoring and **job match %** scoring (default `gpt-4o-mini`). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API. Docker Compose sets defaults that include localhost (dev + **`web`** on 8080). |
 | `PDF_REMOTE_COMPILE_URL` | Optional. If set, the API POSTs the `.tex` to this URL (multipart field `latex`) instead of local `pdflatex`. **Default empty** in Docker Compose (compile inside the `pandoc/latex`-based image). |
 | `IMAGE_PREFIX` | Optional. Docker Compose image prefix for registry push (e.g. `youruser/` or `ghcr.io/org/`). |

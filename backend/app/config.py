@@ -10,8 +10,6 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
-    # Small / fast model for post-generation job match % (empty = skip scoring).
-    openai_match_model: str = "gpt-4o-mini"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # If set (e.g. http://pdf-engine:8080), compile PDF via HTTP multipart POST
     # instead of a local engine. Matches 4teamwork/pdflatex and similar images.
