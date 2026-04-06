@@ -49,14 +49,16 @@ export function AppShell() {
           </span>
           <span className="hidden h-4 w-px bg-[var(--color-border)] sm:block" />
           <div className="flex gap-6">
-            <a
-              href="#"
+            <Link
+              to="/about"
               className="font-medium text-[var(--color-muted)] transition hover:text-[var(--color-primary)]"
             >
               About
-            </a>
+            </Link>
             <a
-              href="#"
+              href="https://github.com/fkvivid/ai-assissted-apply/issues"
+              target="_blank"
+              rel="noopener noreferrer"
               className="font-medium text-[var(--color-muted)] transition hover:text-[var(--color-primary)]"
             >
               Feedback

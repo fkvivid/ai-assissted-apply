@@ -1,6 +1,11 @@
 # AI Assisted Apply
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-ai--assissted--apply-181717?logo=github)](https://github.com/fkvivid/ai-assissted-apply)
+
 Open-source web app to **tailor your resume to a specific job** using your own **OpenAI API key** (bring-your-own-key on the server). The **Home** page asks only for a **job description**; **Settings** stores your **resume**, **LaTeX template** preferences, and **AI instructions** in the browser (`localStorage`). After generation you can **copy LaTeX**, **download a PDF** (server runs `pdflatex` or **Tectonic** when installed), or **download the `.tex`** source.
+
+**Repository:** [github.com/fkvivid/ai-assissted-apply](https://github.com/fkvivid/ai-assissted-apply) · **Feedback / issues:** [GitHub Issues](https://github.com/fkvivid/ai-assissted-apply/issues)
 
 **Stack:** React (Vite) + Tailwind CSS + React Router · FastAPI · OpenAI Chat Completions API.
 
@@ -8,11 +13,14 @@ Open-source web app to **tailor your resume to a specific job** using your own *
 
 ## Features
 
-- **Home:** job description, generate tailored LaTeX, download — only available after a **saved** original resume (otherwise you are redirected to Settings)
+- **Home:** job description → generate tailored LaTeX — only available after a **saved** original resume (otherwise you are redirected to Settings)
+- **Match estimate:** after each run, **Original match** and **Tailored match** percentages (model-based alignment hint — review the output yourself)
 - **Settings:** original resume, default or custom LaTeX template, AI instructions (persisted locally)
 - **Theme:** Under **Settings → Appearance** — System (default), Light, or Dark — stored in the browser; follows OS dark mode when set to System
+- **About** (`/about`): why the project exists — motivation, not a sales pitch
 - Default LaTeX template served by the API (Charter-style layout) or paste your own
 - LaTeX preview with **Copy**, **Download PDF**, and **Download .tex**
+- Footer links to **About** and **Feedback** (GitHub Issues)
 
 ## Prerequisites
 
@@ -125,4 +133,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep changes focused and match existing code style.
+[Issues](https://github.com/fkvivid/ai-assissted-apply/issues) and pull requests are welcome. Please keep changes focused and match existing code style.

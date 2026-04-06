@@ -2,6 +2,10 @@
   "name": "ai-assisted-apply-web",
   "private": true,
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fkvivid/ai-assissted-apply.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
