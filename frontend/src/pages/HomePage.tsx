@@ -89,29 +89,11 @@ function ButtonSpinner({ className }: { className?: string }) {
 const cardClass =
   "rounded-[1.25rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 sm:p-8 shadow-[var(--shadow-card)] dark:border-zinc-700/80";
 
-function normalizeMatchPercent(value: number | null | undefined): number | null {
-  return typeof value === "number" && value >= 0 && value <= 100 ? value : null;
-}
-
-function matchBadgeClass(matchPercent: number): string {
-  if (matchPercent >= 80) {
-    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200";
-  }
-  if (matchPercent >= 50) {
-    return "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-100";
-  }
-  return "border-orange-500/35 bg-orange-500/10 text-orange-950 dark:border-orange-500/30 dark:bg-orange-500/15 dark:text-orange-100";
-}
-
 export function HomePage() {
   const { settings } = useAppSettings();
   const [jobDescription, setJobDescription] = useState("");
   const [generated, setGenerated] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
-  const [matchPercent, setMatchPercent] = useState<number | null>(null);
-  const [originalMatchPercent, setOriginalMatchPercent] = useState<number | null>(
-    null,
-  );
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
@@ -163,8 +145,15 @@ export function HomePage() {
       return;
     }
     setLoading(true);
-    setMatchPercent(null);
-    setOriginalMatchPercent(null);
+    setGenerated(null);
+    setModel(null);
+    setCopied(false);
+    setPdfPreviewError(null);
+    setPdfLoading(false);
+    setPdfObjectUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     try {
       const out = await generateResume({
         resume: settings.resume,
@@ -175,14 +164,10 @@ export function HomePage() {
       });
       setGenerated(out.latex);
       setModel(out.model);
-      setMatchPercent(normalizeMatchPercent(out.match_percent));
-      setOriginalMatchPercent(normalizeMatchPercent(out.original_match_percent));
       await refreshPdfPreview(out.latex);
     } catch (e) {
       setGenerated(null);
       setModel(null);
-      setMatchPercent(null);
-      setOriginalMatchPercent(null);
       setPdfObjectUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -377,38 +362,12 @@ export function HomePage() {
         <section
           className={`relative mt-14 ${cardClass} shadow-[var(--shadow-elevated)]`}
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="text-[16px] font-semibold text-[var(--color-ink)]">
-              Output workspace
-            </h2>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {originalMatchPercent !== null ? (
-                <span
-                  className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold tabular-nums ${matchBadgeClass(
-                    originalMatchPercent,
-                  )}`}
-                  title="Model estimate: how well your original resume aligns with the pasted job description"
-                >
-                  Original match · {originalMatchPercent}%
-                </span>
-              ) : null}
-              {matchPercent !== null ? (
-                <span
-                  className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold tabular-nums ${matchBadgeClass(
-                    matchPercent,
-                  )}`}
-                  title="Model estimate: how well this tailored resume aligns with the pasted job description"
-                >
-                  Tailored match · {matchPercent}%
-                </span>
-              ) : null}
-            </div>
-          </div>
+          <h2 className="text-[16px] font-semibold text-[var(--color-ink)]">
+            Output workspace
+          </h2>
           <p className="mt-1 text-[13px] text-[var(--color-muted)]">
             Edit the LaTeX on the left, then render the PDF on the right. Download
-            the PDF when you are happy with the preview. The match badges compare
-            your original resume and the latest tailored output against the job
-            description you pasted above.
+            the PDF when you are happy with the preview.
           </p>
 
           <div className="mt-6 grid min-h-[min(520px,65vh)] gap-4 lg:grid-cols-2 lg:gap-6">

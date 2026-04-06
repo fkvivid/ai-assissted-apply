@@ -14,7 +14,6 @@ from .pdf_compile import (
     remote_compile_configured,
     tectonic_available,
 )
-from .match_score import compute_job_resume_match_percent
 from .schemas import CompilePdfRequest, GenerateRequest, GenerateResponse
 
 
@@ -137,25 +136,7 @@ def generate(body: GenerateRequest) -> GenerateResponse:
             lines = lines[:-1]
         latex = "\n".join(lines).strip()
 
-    match_percent = compute_job_resume_match_percent(
-        client,
-        model=settings.openai_model,
-        job_description=body.job_description.strip(),
-        resume_text=latex,
-        resume_label="Tailored resume (LaTeX)",
-        ignore_latex_markup=True,
-    )
-    original_match_percent = compute_job_resume_match_percent(
-        client,
-        model=settings.openai_model,
-        job_description=body.job_description.strip(),
-        resume_text=body.resume.strip(),
-        resume_label="Original resume",
-    )
-
     return GenerateResponse(
         latex=latex,
         model=settings.openai_model,
-        match_percent=match_percent,
-        original_match_percent=original_match_percent,
     )

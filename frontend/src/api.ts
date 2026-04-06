@@ -11,8 +11,6 @@ export type GenerateRequest = {
 export type GenerateResponse = {
   latex: string;
   model: string;
-  match_percent: number | null;
-  original_match_percent: number | null;
 };
 
 function parseDetailPayload(err: { detail?: unknown }): string {
