@@ -92,6 +92,7 @@ const cardClass =
 export function HomePage() {
   const { settings } = useAppSettings();
   const [jobDescription, setJobDescription] = useState("");
+  const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [generated, setGenerated] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -161,6 +162,7 @@ export function HomePage() {
         template: settings.template,
         use_default_template: settings.useDefaultTemplate,
         ai_instructions: settings.aiInstructions,
+        additional_instructions: additionalInstructions,
       });
       setGenerated(out.latex);
       setModel(out.model);
@@ -179,6 +181,7 @@ export function HomePage() {
     }
   }, [
     jobDescription,
+    additionalInstructions,
     settings.resume,
     settings.template,
     settings.useDefaultTemplate,
@@ -230,13 +233,13 @@ export function HomePage() {
   }
 
   return (
-    <main className="relative mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8 lg:py-16">
+    <main className="relative mx-auto w-full max-w-[96rem] flex-1 px-5 py-12 sm:px-8 lg:px-10 lg:py-16">
       <div
         className="ui-grid-bg pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-20"
         aria-hidden
       />
 
-      <div className="relative grid gap-12 lg:grid-cols-[1fr_1.05fr] lg:gap-16 lg:items-start">
+      <div className="relative grid gap-12 lg:grid-cols-[0.95fr_1.25fr] lg:gap-16 lg:items-start">
         <div className="space-y-8">
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--color-muted)]">
             Resume studio
@@ -312,6 +315,31 @@ export function HomePage() {
               {jobDescription.trim().split(/\s+/).length} words
             </p>
           ) : null}
+          <details className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/40 dark:bg-zinc-900/30">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-[13px] font-semibold text-[var(--color-ink)] marker:content-none [&::-webkit-details-marker]:hidden">
+              <span>Extra instructions</span>
+              <span className="text-[11px] font-normal text-[var(--color-muted)]">
+                Optional · click to expand or collapse
+              </span>
+            </summary>
+            <div className="border-t border-[var(--color-border)] px-3 pb-3 pt-2">
+              <label htmlFor="extra-instructions" className="sr-only">
+                Extra instructions for this job
+              </label>
+              <p className="text-[12px] leading-relaxed text-[var(--color-muted)]">
+                Add one-off guidance for this posting only — e.g. define an abbreviation, stress a theme, or set priorities. Short notes or bullets are fine.
+              </p>
+              <textarea
+                id="extra-instructions"
+                value={additionalInstructions}
+                onChange={(e) => setAdditionalInstructions(e.target.value)}
+                placeholder="Optional: clarifications, emphasis, or constraints for this role…"
+                rows={3}
+                className="mt-2 min-h-[84px] w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3.5 py-2.5 text-[13px] leading-relaxed text-[var(--color-ink)] shadow-inner placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-400/25"
+                spellCheck
+              />
+            </div>
+          </details>
 
           <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-[var(--color-border)]/80 pt-6">
             {model ? (
@@ -370,7 +398,7 @@ export function HomePage() {
             the PDF when you are happy with the preview.
           </p>
 
-          <div className="mt-6 grid min-h-[min(520px,65vh)] gap-4 lg:grid-cols-2 lg:gap-6">
+          <div className="mt-6 grid min-h-[min(620px,75vh)] gap-4 lg:grid-cols-2 lg:gap-6">
             <div className="flex min-h-[280px] flex-col lg:min-h-0">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]">
@@ -398,7 +426,7 @@ export function HomePage() {
                 value={generated}
                 onChange={(e) => setGenerated(e.target.value)}
                 spellCheck={false}
-                className="min-h-[240px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-preview-bg)] p-3 font-mono text-[11px] leading-relaxed text-[var(--color-preview-text)] focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 lg:min-h-[420px]"
+                className="min-h-[280px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-preview-bg)] p-3.5 font-mono text-[12px] leading-relaxed text-[var(--color-preview-text)] focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 lg:min-h-[520px]"
               />
             </div>
 
@@ -453,7 +481,7 @@ export function HomePage() {
                   <iframe
                     title="PDF preview"
                     src={pdfObjectUrl}
-                    className="min-h-[280px] w-full flex-1 rounded-b-[10px] border-0 bg-white lg:min-h-0"
+                    className="min-h-[320px] w-full flex-1 rounded-b-[10px] border-0 bg-white lg:min-h-0"
                   />
                 ) : (
                   <div className="flex flex-1 items-center justify-center p-6 text-center text-[13px] text-[var(--color-muted)]">

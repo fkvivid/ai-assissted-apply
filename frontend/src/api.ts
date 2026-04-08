@@ -6,6 +6,7 @@ export type GenerateRequest = {
   template: string;
   use_default_template: boolean;
   ai_instructions: string;
+  additional_instructions: string;
 };
 
 export type GenerateResponse = {

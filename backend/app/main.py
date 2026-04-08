@@ -95,6 +95,12 @@ def generate(body: GenerateRequest) -> GenerateResponse:
         f"{body.job_description.strip()}\n\n"
         "## Original resume\n"
         f"{body.resume.strip()}\n\n"
+        "The candidate applies only to roles they are qualified for. Tailor for "
+        "maximum truthful alignment with the job above—resume text is the only "
+        "source of facts. Preserve the original experience order from the source "
+        "resume (no reordering of jobs/projects/education). You may rewrite and "
+        "re-prioritize bullet wording to align with required skills when supported "
+        "by resume evidence, but never invent unsupported hard requirements.\n\n"
         "## LaTeX template to fill\n"
         "Use this as the structural guide. Preserve document class, packages, "
         "macros (e.g. \\jobheading), colors, and section structure. Replace "
@@ -108,6 +114,11 @@ def generate(body: GenerateRequest) -> GenerateResponse:
         "Return a single valid LaTeX document (full file). "
         "No markdown code fences. No commentary before or after the LaTeX."
     )
+    if body.additional_instructions.strip():
+        user_content += (
+            "\n\n## Additional user instructions\n"
+            f"{body.additional_instructions.strip()}\n"
+        )
 
     client = OpenAI(api_key=settings.openai_api_key)
     try:

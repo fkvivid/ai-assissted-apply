@@ -18,6 +18,10 @@ class GenerateRequest(BaseModel):
         min_length=1,
         description="User-editable system-style instructions",
     )
+    additional_instructions: str = Field(
+        default="",
+        description="Optional per-job extra instructions from homepage",
+    )
 
 
 class GenerateResponse(BaseModel):
