@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { compilePdf, generateResume } from "../api";
+import { compilePdf, generateApplicationText, generateResume } from "../api";
 import { useAppSettings } from "../useAppSettings";
 
 const PLACEHOLDER_JOB =
@@ -89,6 +89,15 @@ function ButtonSpinner({ className }: { className?: string }) {
 const cardClass =
   "rounded-[1.25rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 sm:p-8 shadow-[var(--shadow-card)] dark:border-zinc-700/80";
 
+type ExtraApplicationOutput = {
+  id: string;
+  label: string;
+  prompt: string;
+  text: string | null;
+  loading: boolean;
+  error: string | null;
+};
+
 export function HomePage() {
   const { settings } = useAppSettings();
   const [jobDescription, setJobDescription] = useState("");
@@ -101,6 +110,13 @@ export function HomePage() {
   const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extraOutputs, setExtraOutputs] = useState<ExtraApplicationOutput[]>(
+    [],
+  );
+  const [activeOutputTab, setActiveOutputTab] = useState<"resume" | string>(
+    "resume",
+  );
+  const [copiedExtraId, setCopiedExtraId] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -225,6 +241,111 @@ export function HomePage() {
       setError("Could not copy to clipboard.");
     }
   }, [generated]);
+
+  const addExtraOutput = useCallback(() => {
+    const id = crypto.randomUUID();
+    setExtraOutputs((prev) => [
+      ...prev,
+      {
+        id,
+        label: "Cover letter",
+        prompt: "",
+        text: null,
+        loading: false,
+        error: null,
+      },
+    ]);
+    setActiveOutputTab(id);
+  }, []);
+
+  const removeExtraOutput = useCallback((id: string) => {
+    setExtraOutputs((prev) => prev.filter((o) => o.id !== id));
+    setActiveOutputTab((cur) => (cur === id ? "resume" : cur));
+  }, []);
+
+  const updateExtraOutput = useCallback(
+    (id: string, patch: Partial<ExtraApplicationOutput>) => {
+      setExtraOutputs((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+      );
+    },
+    [],
+  );
+
+  const handleGenerateExtra = useCallback(
+    async (id: string) => {
+      const row = extraOutputs.find((o) => o.id === id);
+      const prompt = row?.prompt ?? "";
+      if (!jobDescription.trim()) {
+        updateExtraOutput(id, {
+          error: "Paste a job description first.",
+        });
+        return;
+      }
+      if (!prompt.trim()) {
+        updateExtraOutput(id, {
+          error: "Add your prompt or paste the employer’s question above.",
+        });
+        return;
+      }
+      updateExtraOutput(id, { loading: true, error: null });
+      try {
+        const out = await generateApplicationText({
+          resume: settings.resume,
+          job_description: jobDescription,
+          additional_instructions: additionalInstructions,
+          task_prompt: prompt,
+        });
+        updateExtraOutput(id, {
+          text: out.text,
+          loading: false,
+          error: null,
+        });
+      } catch (e) {
+        updateExtraOutput(id, {
+          loading: false,
+          error: e instanceof Error ? e.message : "Something went wrong.",
+        });
+      }
+    },
+    [
+      additionalInstructions,
+      extraOutputs,
+      jobDescription,
+      settings.resume,
+      updateExtraOutput,
+    ],
+  );
+
+  const handleCopyExtra = useCallback(async (id: string, text: string) => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedExtraId(id);
+      window.setTimeout(() => setCopiedExtraId(null), 2000);
+    } catch {
+      setError("Could not copy to clipboard.");
+    }
+  }, []);
+
+  const handleDownloadExtraTxt = useCallback(
+    (label: string, text: string) => {
+      if (!text.trim()) return;
+      const stamp = new Date().toISOString().slice(0, 10);
+      const safe = label
+        .trim()
+        .replace(/[/\\?%*:|"<>]/g, "_")
+        .replace(/\s+/g, "_")
+        .replace(/_+/g, "_")
+        .slice(0, 80);
+      const name = safe ? `${safe}-${stamp}.txt` : `application-${stamp}.txt`;
+      downloadText(name, text, "text/plain;charset=utf-8");
+    },
+    [],
+  );
+
+  const showOutputWorkspace =
+    generated !== null || extraOutputs.length > 0;
 
   if (!settings.resume.trim()) {
     return (
@@ -386,7 +507,7 @@ export function HomePage() {
         </div>
       </div>
 
-      {generated !== null ? (
+      {showOutputWorkspace ? (
         <section
           className={`relative mt-14 ${cardClass} shadow-[var(--shadow-elevated)]`}
         >
@@ -394,105 +515,294 @@ export function HomePage() {
             Output workspace
           </h2>
           <p className="mt-1 text-[13px] text-[var(--color-muted)]">
-            Edit the LaTeX on the left, then render the PDF on the right. Download
-            the PDF when you are happy with the preview.
+            Use the Resume tab for LaTeX and PDF. Add outputs for cover letters,
+            “why this company,” team intros, or any pasted employer prompt—each
+            tab has its own prompt and generated text.
           </p>
 
-          <div className="mt-6 grid min-h-[min(620px,75vh)] gap-4 lg:grid-cols-2 lg:gap-6">
-            <div className="flex min-h-[280px] flex-col lg:min-h-0">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]">
-                  LaTeX source
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyLatex}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/40"
-                  >
-                    <CopyIcon />
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadTex}
-                    className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] transition hover:text-[var(--color-ink)]"
-                  >
-                    .tex
-                  </button>
-                </div>
-              </div>
-              <textarea
-                value={generated}
-                onChange={(e) => setGenerated(e.target.value)}
-                spellCheck={false}
-                className="min-h-[280px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-preview-bg)] p-3.5 font-mono text-[12px] leading-relaxed text-[var(--color-preview-text)] focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 lg:min-h-[520px]"
-              />
-            </div>
-
-            <div className="flex min-h-[280px] flex-col border-t border-[var(--color-border)] pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]">
-                  PDF preview
-                </span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void refreshPdfPreview(generated)}
-                    disabled={pdfLoading || !generated.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/40 disabled:opacity-50"
-                  >
-                    {pdfLoading ? (
-                      <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-zinc-400 border-t-indigo-600" />
-                    ) : null}
-                    Render preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDownloadPdf()}
-                    disabled={pdfLoading || !generated.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-surface)] transition hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-                  >
-                    <DownloadIcon />
-                    Download PDF
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-zinc-100 dark:bg-zinc-950">
-                {pdfLoading && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[2px] dark:bg-zinc-950/70">
-                    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--color-muted)]">
-                      <span className="size-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
-                      Rendering PDF…
-                    </span>
-                  </div>
-                )}
-                {pdfPreviewError && !pdfLoading ? (
-                  <div className="flex flex-1 flex-col overflow-auto p-4">
-                    <p className="text-[12px] font-semibold text-red-700 dark:text-red-300">
-                      PDF could not be built
-                    </p>
-                    <pre className="mt-2 max-h-[320px] overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--color-muted)]">
-                      {pdfPreviewError}
-                    </pre>
-                  </div>
-                ) : pdfObjectUrl ? (
-                  <iframe
-                    title="PDF preview"
-                    src={pdfObjectUrl}
-                    className="min-h-[320px] w-full flex-1 rounded-b-[10px] border-0 bg-white lg:min-h-0"
-                  />
-                ) : (
-                  <div className="flex flex-1 items-center justify-center p-6 text-center text-[13px] text-[var(--color-muted)]">
-                    {pdfLoading
-                      ? ""
-                      : "Click “Render preview” after generating or editing."}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div
+            className="mt-5 flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] pb-3"
+            role="tablist"
+            aria-label="Output type"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeOutputTab === "resume"}
+              onClick={() => setActiveOutputTab("resume")}
+              className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${
+                activeOutputTab === "resume"
+                  ? "bg-[var(--color-primary)] text-white shadow-md shadow-indigo-500/20"
+                  : "border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-ink)] hover:bg-[var(--color-border)]/35"
+              }`}
+            >
+              Resume
+            </button>
+            {extraOutputs.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                role="tab"
+                aria-selected={activeOutputTab === o.id}
+                onClick={() => setActiveOutputTab(o.id)}
+                className={`max-w-[14rem] truncate rounded-lg px-3.5 py-2 text-[12px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${
+                  activeOutputTab === o.id
+                    ? "bg-[var(--color-primary)] text-white shadow-md shadow-indigo-500/20"
+                    : "border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-ink)] hover:bg-[var(--color-border)]/35"
+                }`}
+              >
+                {o.label.trim() || "Untitled"}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={addExtraOutput}
+              className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-[12px] font-semibold text-[var(--color-primary)] transition hover:border-[var(--color-primary)]/50 hover:bg-indigo-500/5"
+            >
+              + Add output
+            </button>
           </div>
+
+          {activeOutputTab === "resume" ? (
+            <div className="mt-6 grid min-h-[min(620px,75vh)] gap-4 lg:grid-cols-2 lg:gap-6">
+              <div className="flex min-h-[280px] flex-col lg:min-h-0">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]">
+                    LaTeX source
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyLatex}
+                      disabled={!generated?.trim()}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <CopyIcon />
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadTex}
+                      disabled={!generated?.trim()}
+                      className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] transition hover:text-[var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      .tex
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={generated ?? ""}
+                  onChange={(e) => setGenerated(e.target.value)}
+                  spellCheck={false}
+                  placeholder={
+                    generated === null
+                      ? "Run “Craft refined resume” above to fill this, or paste LaTeX."
+                      : undefined
+                  }
+                  className="min-h-[280px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-preview-bg)] p-3.5 font-mono text-[12px] leading-relaxed text-[var(--color-preview-text)] placeholder:text-zinc-500 focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 lg:min-h-[520px] dark:placeholder:text-zinc-500"
+                />
+              </div>
+
+              <div className="flex min-h-[280px] flex-col border-t border-[var(--color-border)] pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]">
+                    PDF preview
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void refreshPdfPreview(generated ?? "")
+                      }
+                      disabled={pdfLoading || !(generated ?? "").trim()}
+                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/40 disabled:opacity-50"
+                    >
+                      {pdfLoading ? (
+                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-zinc-400 border-t-indigo-600" />
+                      ) : null}
+                      Render preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDownloadPdf()}
+                      disabled={pdfLoading || !(generated ?? "").trim()}
+                      className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-surface)] transition hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                    >
+                      <DownloadIcon />
+                      Download PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-zinc-100 dark:bg-zinc-950">
+                  {pdfLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[2px] dark:bg-zinc-950/70">
+                      <span className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--color-muted)]">
+                        <span className="size-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+                        Rendering PDF…
+                      </span>
+                    </div>
+                  )}
+                  {pdfPreviewError && !pdfLoading ? (
+                    <div className="flex flex-1 flex-col overflow-auto p-4">
+                      <p className="text-[12px] font-semibold text-red-700 dark:text-red-300">
+                        PDF could not be built
+                      </p>
+                      <pre className="mt-2 max-h-[320px] overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--color-muted)]">
+                        {pdfPreviewError}
+                      </pre>
+                    </div>
+                  ) : pdfObjectUrl ? (
+                    <iframe
+                      title="PDF preview"
+                      src={pdfObjectUrl}
+                      className="min-h-[320px] w-full flex-1 rounded-b-[10px] border-0 bg-white lg:min-h-0"
+                    />
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center p-6 text-center text-[13px] text-[var(--color-muted)]">
+                      {pdfLoading
+                        ? ""
+                        : !(generated ?? "").trim()
+                          ? "Generate or paste LaTeX, then render."
+                          : "Click “Render preview” after generating or editing."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            (() => {
+              const row = extraOutputs.find((o) => o.id === activeOutputTab);
+              if (!row) {
+                return (
+                  <p className="mt-6 text-[13px] text-[var(--color-muted)]">
+                    This output was removed. Choose another tab.
+                  </p>
+                );
+              }
+              return (
+                <div className="mt-6 grid min-h-[min(480px,70vh)] gap-4 lg:grid-cols-2 lg:gap-6">
+                  <div className="flex min-h-[240px] flex-col">
+                    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <label
+                          htmlFor={`extra-label-${row.id}`}
+                          className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]"
+                        >
+                          Tab name
+                        </label>
+                        <input
+                          id={`extra-label-${row.id}`}
+                          type="text"
+                          value={row.label}
+                          onChange={(e) =>
+                            updateExtraOutput(row.id, {
+                              label: e.target.value,
+                            })
+                          }
+                          className="mt-1.5 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[14px] text-[var(--color-ink)] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600"
+                          placeholder="Cover letter"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeExtraOutput(row.id)}
+                        className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-2 text-[11px] font-semibold text-[var(--color-muted)] transition hover:border-red-300 hover:text-red-700 dark:hover:border-red-800 dark:hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <label
+                      htmlFor={`extra-prompt-${row.id}`}
+                      className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]"
+                    >
+                      Prompt / employer question
+                    </label>
+                    <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-muted)]">
+                      Describe what you need (cover letter angle) or paste the
+                      exact question—e.g. why this company, or a team intro box.
+                    </p>
+                    <textarea
+                      id={`extra-prompt-${row.id}`}
+                      value={row.prompt}
+                      onChange={(e) =>
+                        updateExtraOutput(row.id, { prompt: e.target.value })
+                      }
+                      rows={10}
+                      placeholder='Example: "What interests you about working for this company?" or paste the full Helium intro prompt…'
+                      className="mt-2 min-h-[200px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-input)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--color-ink)] shadow-inner placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:placeholder:text-zinc-500 lg:min-h-[280px]"
+                      spellCheck
+                    />
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void handleGenerateExtra(row.id)}
+                        disabled={row.loading}
+                        className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-5 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {row.loading ? (
+                          <>
+                            <ButtonSpinner />
+                            Generating…
+                          </>
+                        ) : (
+                          <>
+                            <SparkleIcon />
+                            Generate text
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {row.error ? (
+                      <div
+                        role="alert"
+                        className="mt-3 rounded-xl border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] font-medium text-[var(--color-danger-text)]"
+                      >
+                        {row.error}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex min-h-[240px] flex-col border-t border-[var(--color-border)] pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-muted)]">
+                        Generated text
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleCopyExtra(row.id, row.text ?? "")
+                          }
+                          disabled={!row.text?.trim()}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/40 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <CopyIcon />
+                          {copiedExtraId === row.id ? "Copied" : "Copy"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDownloadExtraTxt(row.label, row.text ?? "")
+                          }
+                          disabled={!row.text?.trim()}
+                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] transition hover:text-[var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          .txt
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      readOnly
+                      value={row.text ?? ""}
+                      placeholder="Generated copy appears here after you click Generate text."
+                      className="min-h-[260px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-preview-bg)] p-3.5 text-[14px] leading-relaxed text-[var(--color-preview-text)] placeholder:text-zinc-500 lg:min-h-[320px] dark:placeholder:text-zinc-600"
+                    />
+                  </div>
+                </div>
+              );
+            })()
+          )}
         </section>
       ) : null}
     </main>

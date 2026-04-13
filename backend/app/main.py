@@ -14,7 +14,23 @@ from .pdf_compile import (
     remote_compile_configured,
     tectonic_available,
 )
-from .schemas import CompilePdfRequest, GenerateRequest, GenerateResponse
+from .schemas import (
+    CompilePdfRequest,
+    GenerateApplicationTextRequest,
+    GenerateApplicationTextResponse,
+    GenerateRequest,
+    GenerateResponse,
+)
+
+APPLICATION_TEXT_SYSTEM = (
+    "You help candidates write job application prose: cover letters, answers to "
+    "employer questions, short intro messages, and similar. Ground every claim in "
+    "the resume and job description only—do not invent employers, titles, skills, "
+    "or credentials. Match the tone the user asks for when they specify it; "
+    "otherwise use clear, professional, human-sounding prose. Output only the "
+    "requested text—no preamble, no markdown fences unless the user explicitly "
+    "asked for code."
+)
 
 
 def _load_default_template() -> str:
@@ -149,5 +165,68 @@ def generate(body: GenerateRequest) -> GenerateResponse:
 
     return GenerateResponse(
         latex=latex,
+        model=settings.openai_model,
+    )
+
+
+@app.post("/api/generate-application-text", response_model=GenerateApplicationTextResponse)
+def generate_application_text(
+    body: GenerateApplicationTextRequest,
+) -> GenerateApplicationTextResponse:
+    if not settings.openai_api_key.strip():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OPENAI_API_KEY is not set on the server. "
+                "Add it to your environment or backend/.env — see README."
+            ),
+        )
+
+    user_content = (
+        "## Job description\n"
+        f"{body.job_description.strip()}\n\n"
+        "## Resume (only source of facts about the candidate)\n"
+        f"{body.resume.strip()}\n\n"
+        "## What to write\n"
+        f"{body.task_prompt.strip()}\n"
+    )
+    if body.additional_instructions.strip():
+        user_content += (
+            "\n\n## Additional notes for this application\n"
+            f"{body.additional_instructions.strip()}\n"
+        )
+    user_content += (
+        "\n\nRespond with only the text for the task above—no title line like "
+        '"Cover letter" unless the format requires it.'
+    )
+
+    client = OpenAI(api_key=settings.openai_api_key)
+    try:
+        completion = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": APPLICATION_TEXT_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.45,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI request failed: {e!s}",
+        ) from e
+
+    choice = completion.choices[0]
+    text = (choice.message.content or "").strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+    return GenerateApplicationTextResponse(
+        text=text,
         model=settings.openai_model,
     )

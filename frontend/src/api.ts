@@ -14,6 +14,18 @@ export type GenerateResponse = {
   model: string;
 };
 
+export type GenerateApplicationTextRequest = {
+  resume: string;
+  job_description: string;
+  additional_instructions: string;
+  task_prompt: string;
+};
+
+export type GenerateApplicationTextResponse = {
+  text: string;
+  model: string;
+};
+
 function parseDetailPayload(err: { detail?: unknown }): string {
   const d = err.detail;
   if (typeof d === "string") return d;
@@ -55,6 +67,21 @@ export async function generateResume(
   body: GenerateRequest,
 ): Promise<GenerateResponse> {
   const res = await fetch(`${API_BASE}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, res.statusText);
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function generateApplicationText(
+  body: GenerateApplicationTextRequest,
+): Promise<GenerateApplicationTextResponse> {
+  const res = await fetch(`${API_BASE}/api/generate-application-text`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
