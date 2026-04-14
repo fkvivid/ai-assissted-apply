@@ -59,3 +59,20 @@ class CompilePdfRequest(BaseModel):
         max_length=500_000,
         description="Full LaTeX document to compile (remote HTTP, pdflatex, or tectonic)",
     )
+
+
+class AnalyzeKeywordGapsRequest(BaseModel):
+    job_description: str = Field(..., min_length=1, description="Target job posting text")
+    resume: str = Field(..., min_length=1, description="Candidate resume (compare for coverage)")
+
+
+class AnalyzeKeywordGapsResponse(BaseModel):
+    missing_keywords: list[str] = Field(
+        default_factory=list,
+        description="JD skills/terms not clearly evidenced in the resume",
+    )
+    matched_keywords: list[str] = Field(
+        default_factory=list,
+        description="JD skills/terms that clearly appear or are honest equivalents in the resume",
+    )
+    model: str

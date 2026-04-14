@@ -26,6 +26,17 @@ export type GenerateApplicationTextResponse = {
   model: string;
 };
 
+export type AnalyzeKeywordGapsRequest = {
+  job_description: string;
+  resume: string;
+};
+
+export type AnalyzeKeywordGapsResponse = {
+  missing_keywords: string[];
+  matched_keywords: string[];
+  model: string;
+};
+
 function parseDetailPayload(err: { detail?: unknown }): string {
   const d = err.detail;
   if (typeof d === "string") return d;
@@ -67,6 +78,21 @@ export async function generateResume(
   body: GenerateRequest,
 ): Promise<GenerateResponse> {
   const res = await fetch(`${API_BASE}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, res.statusText);
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function analyzeKeywordGaps(
+  body: AnalyzeKeywordGapsRequest,
+): Promise<AnalyzeKeywordGapsResponse> {
+  const res = await fetch(`${API_BASE}/api/analyze-keyword-gaps`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

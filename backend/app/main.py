@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,6 +16,8 @@ from .pdf_compile import (
     tectonic_available,
 )
 from .schemas import (
+    AnalyzeKeywordGapsRequest,
+    AnalyzeKeywordGapsResponse,
     CompilePdfRequest,
     GenerateApplicationTextRequest,
     GenerateApplicationTextResponse,
@@ -26,11 +29,67 @@ APPLICATION_TEXT_SYSTEM = (
     "You help candidates write job application prose: cover letters, answers to "
     "employer questions, short intro messages, and similar. Ground every claim in "
     "the resume and job description only—do not invent employers, titles, skills, "
-    "or credentials. Match the tone the user asks for when they specify it; "
-    "otherwise use clear, professional, human-sounding prose. Output only the "
+    "or credentials. When the resume includes a portfolio, project links, or a "
+    "personal site, keep those references accurate when they fit the task—do not "
+    "drop them only to shorten. Match the tone the user asks for when they specify "
+    "it; otherwise use clear, professional, human-sounding prose. Output only the "
     "requested text—no preamble, no markdown fences unless the user explicitly "
     "asked for code."
 )
+
+ANALYZE_KEYWORD_GAPS_SYSTEM = (
+    "You compare a job description to a candidate resume. Extract concrete skills, "
+    "tools, frameworks, platforms, methodologies, and domain keywords the posting "
+    "treats as important (required or preferred).\n"
+    "- missing_keywords: phrases important in the job but NOT clearly supported by "
+    "the resume—omit items already evidenced or strong honest equivalents "
+    "(e.g. React vs React.js).\n"
+    "- matched_keywords: phrases clearly present or equivalent in the resume.\n"
+    "Use short phrases (usually 1–4 words), wording similar to the job when sensible. "
+    "Each list: unique items, no full sentences, max 25 items each.\n"
+    "Respond with ONLY a JSON object with keys missing_keywords and matched_keywords "
+    "(arrays of strings). No markdown or commentary."
+)
+
+
+def _strip_llm_json_fence(raw: str) -> str:
+    t = raw.strip()
+    if t.startswith("```"):
+        lines = t.split("\n")
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        t = "\n".join(lines).strip()
+    return t
+
+
+def _normalize_keyword_gap_lists(data: dict) -> tuple[list[str], list[str]]:
+    def clean_arr(value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            s = " ".join(item.split()).strip()
+            if len(s) < 2 or len(s) > 80:
+                continue
+            low = s.lower()
+            if low in seen:
+                continue
+            seen.add(low)
+            out.append(s)
+            if len(out) >= 25:
+                break
+        return out
+
+    missing = clean_arr(data.get("missing_keywords", []))
+    matched = clean_arr(data.get("matched_keywords", []))
+    matched_lower = {m.lower() for m in matched}
+    missing = [m for m in missing if m.lower() not in matched_lower]
+    return missing, matched
 
 
 def _load_default_template() -> str:
@@ -114,12 +173,15 @@ def generate(body: GenerateRequest) -> GenerateResponse:
         "The candidate applies only to roles they are qualified for. Tailor for "
         "maximum truthful alignment with the job above—resume text is the only "
         "source of facts. Preserve the original experience order from the source "
-        "resume (no reordering of jobs/projects/education). You may rewrite and "
+        "resume (no reordering of jobs/projects/education). Keep portfolio-related "
+        "content from the resume: portfolio sections, project or personal-site links, "
+        "GitHub, and similar URLs—do not remove or strip them when tailoring. You may rewrite and "
         "re-prioritize bullet wording to align with required skills when supported "
         "by resume evidence, but never invent unsupported hard requirements.\n\n"
         "## LaTeX template to fill\n"
         "Use this as the structural guide. Preserve document class, packages, "
-        "macros (e.g. \\jobheading), colors, and section structure. Replace "
+        "macros (e.g. \\name, \\headline, \\contact, \\summarytext, \\skillline, "
+        "\\jobheading, \\projectheading), colors, and section structure. Replace "
         "placeholder text (YOUR NAME, YOUR TITLE, example bullets, tabular "
         "rows, etc.) with content derived only from the resume. Output must "
         "compile with pdfLaTeX.\n\n"
@@ -228,5 +290,63 @@ def generate_application_text(
 
     return GenerateApplicationTextResponse(
         text=text,
+        model=settings.openai_model,
+    )
+
+
+@app.post("/api/analyze-keyword-gaps", response_model=AnalyzeKeywordGapsResponse)
+def analyze_keyword_gaps(body: AnalyzeKeywordGapsRequest) -> AnalyzeKeywordGapsResponse:
+    if not settings.openai_api_key.strip():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OPENAI_API_KEY is not set on the server. "
+                "Add it to your environment or backend/.env — see README."
+            ),
+        )
+
+    user_content = (
+        "## Job description\n"
+        f"{body.job_description.strip()}\n\n"
+        "## Resume\n"
+        f"{body.resume.strip()}\n"
+    )
+
+    client = OpenAI(api_key=settings.openai_api_key)
+    try:
+        completion = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": ANALYZE_KEYWORD_GAPS_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI request failed: {e!s}",
+        ) from e
+
+    raw = (completion.choices[0].message.content or "").strip()
+    raw = _strip_llm_json_fence(raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not parse keyword analysis JSON: {e!s}",
+        ) from e
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=502,
+            detail="Keyword analysis response was not a JSON object.",
+        )
+
+    missing, matched = _normalize_keyword_gap_lists(parsed)
+    return AnalyzeKeywordGapsResponse(
+        missing_keywords=missing,
+        matched_keywords=matched,
         model=settings.openai_model,
     )

@@ -28,7 +28,7 @@ The candidate only applies to jobs they are actually capable of doing. Your job 
 5. For hard requirements not supported by evidence, do not claim them. Instead, emphasize nearest truthful adjacent strengths already in the resume.
 
 ## Structure & content
-6. Preserve experience order exactly as provided in the original resume. Do not reorder jobs, projects, education, or date chronology. You may rewrite wording for alignment, improve bullet quality, and emphasize impact where the resume already supports it, but keep the original sequence of entries.
+6. Preserve experience order exactly as provided in the original resume. Do not reorder jobs, projects, education, or date chronology. You may rewrite wording for alignment, improve bullet quality, and emphasize impact where the resume already supports it, but keep the original sequence of entries. Preserve portfolio-related content from the resume: portfolio sections, project or personal-site links, GitHub, and similar URLs—do not remove or strip them when tailoring.
 
 ## Skills & core competencies
 Where the template has a Skills, Technical skills, Stack, or Core competencies section:
