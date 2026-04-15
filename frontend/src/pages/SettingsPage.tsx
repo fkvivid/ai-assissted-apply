@@ -283,6 +283,36 @@ export function SettingsPage() {
             <ThemeToggle />
           </div>
         </section>
+
+        <div className="hidden lg:block">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+            Journal
+          </p>
+          <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-muted)]">
+            Save prompt after generation.
+          </p>
+        </div>
+        <section className={cardClass}>
+          <h2 className="text-[16px] font-semibold text-[var(--color-ink)]">
+            Apply journal
+          </h2>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-muted)]">
+            Ask before saving a generated resume to MongoDB history.
+          </p>
+          <label className="mt-5 flex cursor-pointer items-center gap-3 text-[13px] font-semibold text-[var(--color-ink)]">
+            <input
+              type="checkbox"
+              checked={draft.askToSaveJournalAfterGenerate}
+              onChange={(e) =>
+                updateDraft({
+                  askToSaveJournalAfterGenerate: e.target.checked,
+                })
+              }
+              className="size-4 rounded border-[var(--color-border-strong)] text-indigo-600 focus:ring-indigo-500/30 dark:text-indigo-500"
+            />
+            Ask to save entry after generating a resume
+          </label>
+        </section>
       </div>
 
       <div className="mt-12 flex flex-wrap items-center justify-end gap-3 border-t border-[var(--color-border)] pt-10">

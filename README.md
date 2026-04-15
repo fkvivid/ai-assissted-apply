@@ -15,6 +15,7 @@ Open-source web app to **tailor your resume to a specific job** using your own *
 
 - **Home:** job description → generate tailored LaTeX — only available after a **saved** original resume (otherwise you are redirected to Settings)
 - **Settings:** original resume, default or custom LaTeX template, AI instructions (persisted locally)
+- **Apply journal:** optional save prompt after generation, MongoDB-backed history page for editing/reusing past applications
 - **Theme:** Under **Settings → Appearance** — System (default), Light, or Dark — stored in the browser; follows OS dark mode when set to System
 - **About** (`/about`): why the project exists — motivation, not a sales pitch
 - Default LaTeX template served by the API (Charter-style layout) or paste your own
@@ -120,6 +121,7 @@ Expect `OK — default template PDF: … bytes`. If that passes but a tailored r
 | `OPENAI_MODEL` | Model for resume tailoring (default `gpt-4o-mini`). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API. Docker Compose sets defaults that include localhost (dev + **`web`** on 8080). |
 | `PDF_REMOTE_COMPILE_URL` | Optional. If set, the API POSTs the `.tex` to this URL (multipart field `latex`) instead of local `pdflatex`. **Default empty** in Docker Compose (compile inside the `pandoc/latex`-based image). |
+| `MONGODB_URI` | MongoDB connection string for apply journal persistence, including DB name (default `mongodb://localhost:27017/ai_assisted_apply`). |
 | `IMAGE_PREFIX` | Optional. Docker Compose image prefix for registry push (e.g. `youruser/` or `ghcr.io/org/`). |
 | `TAG` | Optional image tag (default `latest`). |
 | `WEB_PORT` | Host port mapped to the **`web`** container (default **8080** → container **8080**). |

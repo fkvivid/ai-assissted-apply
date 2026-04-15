@@ -1,3 +1,6 @@
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -76,3 +79,66 @@ class AnalyzeKeywordGapsResponse(BaseModel):
         description="JD skills/terms that clearly appear or are honest equivalents in the resume",
     )
     model: str
+
+
+ApplicationStatus = Literal[
+    "applied",
+    "interviewing",
+    "rejected",
+    "ghosted",
+    "offer",
+    "withdrawn",
+]
+
+
+class ApplyJournalQuestionAnswer(BaseModel):
+    question: str = Field(default="")
+    answer: str = Field(default="")
+
+
+class ApplyJournalCreateRequest(BaseModel):
+    date: str = Field(default="")
+    company_name: str = Field(default="")
+    position: str = Field(default="")
+    salary: str = Field(default="")
+    location: str = Field(default="")
+    job_source: str = Field(default="")
+    link: str = Field(default="")
+    expected_salary: str = Field(default="")
+    job_description: str = Field(default="")
+    resume_latex: str = Field(default="")
+    question_answers: list[ApplyJournalQuestionAnswer] = Field(default_factory=list)
+    status: ApplicationStatus = Field(default="applied")
+
+
+class ApplyJournalUpdateRequest(BaseModel):
+    date: str | None = None
+    company_name: str | None = None
+    position: str | None = None
+    salary: str | None = None
+    location: str | None = None
+    job_source: str | None = None
+    link: str | None = None
+    expected_salary: str | None = None
+    job_description: str | None = None
+    resume_latex: str | None = None
+    question_answers: list[ApplyJournalQuestionAnswer] | None = None
+    status: ApplicationStatus | None = None
+
+
+class ApplyJournalEntry(BaseModel):
+    id: str
+    date: str = ""
+    company_name: str = ""
+    position: str = ""
+    salary: str = ""
+    location: str = ""
+    job_source: str = ""
+    link: str = ""
+    expected_salary: str = ""
+    job_description: str = ""
+    resume_latex: str = ""
+    question_answers: list[ApplyJournalQuestionAnswer] = Field(default_factory=list)
+    status: ApplicationStatus = "applied"
+    created_at: datetime
+    updated_at: datetime

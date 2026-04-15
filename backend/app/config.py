@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # If set (e.g. http://pdf-engine:8080), compile PDF via HTTP multipart POST
     # instead of a local engine. Matches 4teamwork/pdflatex and similar images.
     pdf_remote_compile_url: str = ""
+    mongodb_uri: str = "mongodb://localhost:27017/ai_assisted_apply"
 
     @property
     def cors_origin_list(self) -> list[str]:

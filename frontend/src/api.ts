@@ -37,6 +37,53 @@ export type AnalyzeKeywordGapsResponse = {
   model: string;
 };
 
+export type ApplyJournalEntry = {
+  id: string;
+  date: string;
+  company_name: string;
+  position: string;
+  salary: string;
+  location: string;
+  job_source: string;
+  link: string;
+  expected_salary: string;
+  job_description: string;
+  resume_latex: string;
+  question_answers: Array<{ question: string; answer: string }>;
+  status:
+    | "applied"
+    | "interviewing"
+    | "rejected"
+    | "ghosted"
+    | "offer"
+    | "withdrawn";
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApplyJournalCreateRequest = {
+  date?: string;
+  company_name?: string;
+  position?: string;
+  salary?: string;
+  location?: string;
+  job_source?: string;
+  link?: string;
+  expected_salary?: string;
+  job_description?: string;
+  resume_latex?: string;
+  question_answers?: Array<{ question?: string; answer?: string }>;
+  status?:
+    | "applied"
+    | "interviewing"
+    | "rejected"
+    | "ghosted"
+    | "offer"
+    | "withdrawn";
+};
+
+export type ApplyJournalUpdateRequest = Partial<ApplyJournalCreateRequest>;
+
 function parseDetailPayload(err: { detail?: unknown }): string {
   const d = err.detail;
   if (typeof d === "string") return d;
@@ -143,4 +190,54 @@ export async function getPdfStatus(): Promise<{
     throw new Error("Could not check PDF status");
   }
   return res.json();
+}
+
+export async function listApplyJournal(): Promise<ApplyJournalEntry[]> {
+  const res = await fetch(`${API_BASE}/api/apply-journal`);
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, "Could not load apply journal.");
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function createApplyJournal(
+  body: ApplyJournalCreateRequest,
+): Promise<ApplyJournalEntry> {
+  const res = await fetch(`${API_BASE}/api/apply-journal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, "Could not save apply journal.");
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function updateApplyJournal(
+  id: string,
+  body: ApplyJournalUpdateRequest,
+): Promise<ApplyJournalEntry> {
+  const res = await fetch(`${API_BASE}/api/apply-journal/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, "Could not update apply journal.");
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function deleteApplyJournal(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/apply-journal/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, "Could not delete apply journal.");
+    throw new Error(msg);
+  }
 }

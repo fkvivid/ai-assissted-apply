@@ -50,6 +50,7 @@ export type AppSettings = {
   useDefaultTemplate: boolean;
   template: string;
   aiInstructions: string;
+  askToSaveJournalAfterGenerate: boolean;
 };
 
 const STORAGE_KEY = "aaa-app-settings-v1";
@@ -60,6 +61,7 @@ const DEFAULTS: AppSettings = {
   useDefaultTemplate: true,
   template: "",
   aiInstructions: DEFAULT_AI_INSTRUCTIONS,
+  askToSaveJournalAfterGenerate: true,
 };
 
 export function loadSettings(): AppSettings {

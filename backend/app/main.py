@@ -1,13 +1,16 @@
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from openai import OpenAI
 
 from .config import settings
+from .db import get_apply_journal_collection
 from .pdf_compile import (
     PdfCompileError,
     compile_latex_to_pdf,
@@ -19,6 +22,9 @@ from .pdf_compile import (
 from .schemas import (
     AnalyzeKeywordGapsRequest,
     AnalyzeKeywordGapsResponse,
+    ApplyJournalCreateRequest,
+    ApplyJournalEntry,
+    ApplyJournalUpdateRequest,
     CompilePdfRequest,
     GenerateApplicationTextRequest,
     GenerateApplicationTextResponse,
@@ -146,6 +152,26 @@ def _extract_requirements_sections(job_description: str) -> tuple[str, bool]:
 def _load_default_template() -> str:
     p = Path(__file__).resolve().parent / "default_template.tex"
     return p.read_text(encoding="utf-8")
+
+
+def _journal_doc_to_entry(doc: dict) -> ApplyJournalEntry:
+    return ApplyJournalEntry(
+        id=str(doc["_id"]),
+        date=doc.get("date", ""),
+        company_name=doc.get("company_name", ""),
+        position=doc.get("position", ""),
+        salary=doc.get("salary", ""),
+        location=doc.get("location", ""),
+        job_source=doc.get("job_source", ""),
+        link=doc.get("link", ""),
+        expected_salary=doc.get("expected_salary", ""),
+        job_description=doc.get("job_description", ""),
+        resume_latex=doc.get("resume_latex", ""),
+        question_answers=doc.get("question_answers", []),
+        status=doc.get("status", "applied"),
+        created_at=doc["created_at"],
+        updated_at=doc["updated_at"],
+    )
 
 
 DEFAULT_TEMPLATE = _load_default_template()
@@ -403,3 +429,84 @@ def analyze_keyword_gaps(body: AnalyzeKeywordGapsRequest) -> AnalyzeKeywordGapsR
         matched_keywords=matched,
         model=settings.openai_model,
     )
+
+
+@app.get("/api/apply-journal", response_model=list[ApplyJournalEntry])
+def list_apply_journal() -> list[ApplyJournalEntry]:
+    collection = get_apply_journal_collection()
+    docs = collection.find().sort("updated_at", -1)
+    return [_journal_doc_to_entry(doc) for doc in docs]
+
+
+@app.get("/api/apply-journal/{entry_id}", response_model=ApplyJournalEntry)
+def get_apply_journal(entry_id: str) -> ApplyJournalEntry:
+    collection = get_apply_journal_collection()
+    try:
+        obj_id = ObjectId(entry_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid journal id.") from e
+    doc = collection.find_one({"_id": obj_id})
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found.")
+    return _journal_doc_to_entry(doc)
+
+
+@app.post("/api/apply-journal", response_model=ApplyJournalEntry)
+def create_apply_journal(body: ApplyJournalCreateRequest) -> ApplyJournalEntry:
+    now = datetime.now(UTC)
+    doc = {
+        "date": body.date,
+        "company_name": body.company_name,
+        "position": body.position,
+        "salary": body.salary,
+        "location": body.location,
+        "job_source": body.job_source,
+        "link": body.link,
+        "expected_salary": body.expected_salary,
+        "job_description": body.job_description,
+        "resume_latex": body.resume_latex,
+        "question_answers": [qa.model_dump() for qa in body.question_answers],
+        "status": body.status or "applied",
+        "created_at": now,
+        "updated_at": now,
+    }
+    collection = get_apply_journal_collection()
+    result = collection.insert_one(doc)
+    created = collection.find_one({"_id": result.inserted_id})
+    if created is None:
+        raise HTTPException(status_code=500, detail="Failed to load created entry.")
+    return _journal_doc_to_entry(created)
+
+
+@app.patch("/api/apply-journal/{entry_id}", response_model=ApplyJournalEntry)
+def update_apply_journal(
+    entry_id: str,
+    body: ApplyJournalUpdateRequest,
+) -> ApplyJournalEntry:
+    try:
+        obj_id = ObjectId(entry_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid journal id.") from e
+    updates = body.model_dump(exclude_none=True)
+    updates["updated_at"] = datetime.now(UTC)
+    collection = get_apply_journal_collection()
+    result = collection.update_one({"_id": obj_id}, {"$set": updates})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Journal entry not found.")
+    doc = collection.find_one({"_id": obj_id})
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found.")
+    return _journal_doc_to_entry(doc)
+
+
+@app.delete("/api/apply-journal/{entry_id}")
+def delete_apply_journal(entry_id: str) -> dict[str, bool]:
+    try:
+        obj_id = ObjectId(entry_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid journal id.") from e
+    collection = get_apply_journal_collection()
+    result = collection.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Journal entry not found.")
+    return {"ok": True}

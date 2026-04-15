@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   analyzeKeywordGaps,
   compilePdf,
+  createApplyJournal,
   generateApplicationText,
   generateResume,
 } from "../api";
@@ -141,7 +142,37 @@ type ExtraApplicationOutput = {
   error: string | null;
 };
 
+type JournalStatus =
+  | "applied"
+  | "interviewing"
+  | "rejected"
+  | "ghosted"
+  | "offer"
+  | "withdrawn";
+
+const JOURNAL_STATUS_OPTIONS: Array<{ value: JournalStatus; label: string }> = [
+  { value: "applied", label: "Applied" },
+  { value: "interviewing", label: "Interviewing" },
+  { value: "rejected", label: "Rejected" },
+  { value: "ghosted", label: "Ghosted" },
+  { value: "offer", label: "Offer" },
+  { value: "withdrawn", label: "Withdrawn" },
+];
+
+function currentLocalDateTimeInputValue(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = now.getFullYear();
+  const mm = pad(now.getMonth() + 1);
+  const dd = pad(now.getDate());
+  const hh = pad(now.getHours());
+  const min = pad(now.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
 export function HomePage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { settings } = useAppSettings();
   const [jobDescription, setJobDescription] = useState("");
   const [additionalInstructions, setAdditionalInstructions] = useState("");
@@ -167,6 +198,21 @@ export function HomePage() {
   const [customGapKeywords, setCustomGapKeywords] = useState<string[]>([]);
   const [selectedGapKeywords, setSelectedGapKeywords] = useState<string[]>([]);
   const [manualKeywordDraft, setManualKeywordDraft] = useState("");
+  const [gapPanelOpen, setGapPanelOpen] = useState(false);
+  const [journalDate, setJournalDate] = useState(
+    currentLocalDateTimeInputValue(),
+  );
+  const [journalCompanyName, setJournalCompanyName] = useState("");
+  const [journalPosition, setJournalPosition] = useState("");
+  const [journalSalary, setJournalSalary] = useState("");
+  const [journalLocation, setJournalLocation] = useState("");
+  const [journalJobSource, setJournalJobSource] = useState("");
+  const [journalLink, setJournalLink] = useState("");
+  const [journalExpectedSalary, setJournalExpectedSalary] = useState("");
+  const [journalStatus, setJournalStatus] = useState<JournalStatus>("applied");
+  const [journalMessage, setJournalMessage] = useState<string | null>(null);
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [savePromptLoading, setSavePromptLoading] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -181,6 +227,40 @@ export function HomePage() {
     setCustomGapKeywords([]);
     setSelectedGapKeywords([]);
   }, [jobDescription]);
+
+  useEffect(() => {
+    const state = location.state as
+      | {
+          journalEntry?: {
+            job_description?: string;
+            resume_latex?: string;
+            date?: string;
+            company_name?: string;
+            position?: string;
+            salary?: string;
+            location?: string;
+            job_source?: string;
+            link?: string;
+            expected_salary?: string;
+            status?: JournalStatus;
+          };
+        }
+      | null;
+    const entry = state?.journalEntry;
+    if (!entry) return;
+    setJobDescription(entry.job_description ?? "");
+    setGenerated(entry.resume_latex ?? null);
+    setJournalDate(entry.date ?? "");
+    setJournalCompanyName(entry.company_name ?? "");
+    setJournalPosition(entry.position ?? "");
+    setJournalSalary(entry.salary ?? "");
+    setJournalLocation(entry.location ?? "");
+    setJournalJobSource(entry.job_source ?? "");
+    setJournalLink(entry.link ?? "");
+    setJournalExpectedSalary(entry.expected_salary ?? "");
+    setJournalStatus(entry.status ?? "applied");
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const gapKeywordChips = useMemo(() => {
     const seen = new Set<string>();
@@ -259,6 +339,7 @@ export function HomePage() {
   }, []);
 
   const handleAnalyzeGaps = useCallback(async () => {
+    setGapPanelOpen(true);
     setGapError(null);
     if (!jobDescription.trim()) {
       setGapError("Paste a job description first.");
@@ -319,8 +400,50 @@ export function HomePage() {
     setManualKeywordDraft("");
   }, [manualKeywordDraft, gapMissing]);
 
+  const handleSaveJournalEntry = useCallback(async () => {
+    if (!generated?.trim()) return;
+    setSavePromptLoading(true);
+    setJournalMessage(null);
+    try {
+      await createApplyJournal({
+        date: journalDate || currentLocalDateTimeInputValue(),
+        company_name: journalCompanyName,
+        position: journalPosition,
+        salary: journalSalary,
+        location: journalLocation,
+        job_source: journalJobSource,
+        link: journalLink,
+        expected_salary: journalExpectedSalary,
+        job_description: jobDescription,
+        resume_latex: generated,
+        status: journalStatus,
+      });
+      setSavePromptOpen(false);
+      setJournalMessage("Saved to history.");
+    } catch (e) {
+      setJournalMessage(
+        e instanceof Error ? e.message : "Could not save to history.",
+      );
+    } finally {
+      setSavePromptLoading(false);
+    }
+  }, [
+    generated,
+    journalDate,
+    journalCompanyName,
+    journalPosition,
+    journalSalary,
+    journalLocation,
+    journalJobSource,
+    journalLink,
+    journalExpectedSalary,
+    jobDescription,
+    journalStatus,
+  ]);
+
   const handleGenerate = useCallback(async () => {
     setError(null);
+    setJournalMessage(null);
     if (!jobDescription.trim()) {
       setError("Paste a job description first.");
       return;
@@ -350,6 +473,9 @@ export function HomePage() {
       setGenerated(out.latex);
       setModel(out.model);
       await refreshPdfPreview(out.latex);
+      if (settings.askToSaveJournalAfterGenerate) {
+        setSavePromptOpen(true);
+      }
     } catch (e) {
       setGenerated(null);
       setModel(null);
@@ -369,6 +495,7 @@ export function HomePage() {
     settings.template,
     settings.useDefaultTemplate,
     settings.aiInstructions,
+    settings.askToSaveJournalAfterGenerate,
     refreshPdfPreview,
   ]);
 
@@ -609,22 +736,15 @@ export function HomePage() {
           ) : null}
 
           <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/50 p-4 dark:bg-zinc-900/25">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]">
-                  Missing keywords
-                  {gapKeywordChips.length > 0 ? (
-                    <span className="ml-2 font-mono text-[11px] font-normal normal-case tracking-normal text-[var(--color-ink)]">
-                      ({gapSelectedCount}/{gapKeywordChips.length} selected)
-                    </span>
-                  ) : null}
-                </h3>
-                <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--color-muted)]">
-                  Compare the posting to your saved resume, then tick only skills
-                  or terms you honestly have. Selected items are added to this
-                  job&apos;s instructions when you generate.
-                </p>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]">
+                Missing keywords
+                {gapKeywordChips.length > 0 ? (
+                  <span className="ml-2 font-mono text-[11px] font-normal normal-case tracking-normal text-[var(--color-ink)]">
+                    ({gapSelectedCount}/{gapKeywordChips.length} selected)
+                  </span>
+                ) : null}
+              </h3>
               <button
                 type="button"
                 onClick={() => void handleAnalyzeGaps()}
@@ -645,114 +765,130 @@ export function HomePage() {
               </button>
             </div>
 
-            {gapError ? (
-              <div
-                role="alert"
-                className="mt-3 rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-text)]"
-              >
-                {gapError}
-              </div>
-            ) : null}
+            <details
+              className="mt-3"
+              open={gapPanelOpen}
+              onToggle={(e) =>
+                setGapPanelOpen((e.currentTarget as HTMLDetailsElement).open)
+              }
+            >
+              <summary className="cursor-pointer list-none text-[12px] font-medium text-[var(--color-muted)] marker:content-none [&::-webkit-details-marker]:hidden">
+                Show keyword suggestions and controls
+              </summary>
 
-            {gapMatched.length > 0 ? (
-              <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-muted)]">
-                <span className="font-semibold text-[var(--color-ink)]">
-                  Already on your resume:
-                </span>{" "}
-                {gapMatched.join(", ")}
-              </p>
-            ) : null}
-
-            {!gapLoading &&
-            gapMissing.length === 0 &&
-            gapMatched.length > 0 &&
-            !gapError ? (
-              <p className="mt-3 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                No obvious missing keywords—the posting lines up with what&apos;s
-                already in your resume. You can still add terms below.
-              </p>
-            ) : null}
-
-            {gapKeywordChips.length > 0 ? (
-              <div className="mt-4">
-                <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={selectAllGapKeywords}
-                    className="text-[12px] font-semibold text-[var(--color-primary)] hover:underline"
-                  >
-                    Select all
-                  </button>
-                  <span className="text-[var(--color-border)]">·</span>
-                  <button
-                    type="button"
-                    onClick={clearGapKeywordSelection}
-                    className="text-[12px] font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <ul className="flex flex-wrap gap-2" aria-label="Suggested keywords">
-                  {gapKeywordChips.map((kw, idx) => {
-                    const checked = selectedKeywordSet.has(kw.toLowerCase());
-                    const id = `gap-kw-${idx}`;
-                    return (
-                      <li key={`${kw}-${idx}`}>
-                        <label
-                          htmlFor={id}
-                          className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition ${
-                            checked
-                              ? "border-indigo-400 bg-indigo-500/10 text-[var(--color-ink)] dark:border-indigo-500"
-                              : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-border)] dark:bg-zinc-900/40"
-                          }`}
-                        >
-                          <input
-                            id={id}
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleGapKeyword(kw)}
-                            className="size-3.5 rounded border-[var(--color-border)] text-indigo-600 focus:ring-indigo-500/30"
-                          />
-                          {kw}
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-[var(--color-border)]/60 pt-4">
-              <div className="min-w-[12rem] flex-1">
-                <label
-                  htmlFor="manual-gap-keyword"
-                  className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]"
+              {gapError ? (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-text)]"
                 >
-                  Add keyword
-                </label>
-                <input
-                  id="manual-gap-keyword"
-                  type="text"
-                  value={manualKeywordDraft}
-                  onChange={(e) => setManualKeywordDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addManualGapKeyword();
-                    }
-                  }}
-                  placeholder="e.g. Django, HIPAA, SOC 2…"
-                  className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px] text-[var(--color-ink)] placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600"
-                />
+                  {gapError}
+                </div>
+              ) : null}
+
+              {gapMatched.length > 0 ? (
+                <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-muted)]">
+                  <span className="font-semibold text-[var(--color-ink)]">
+                    Already on your resume:
+                  </span>{" "}
+                  {gapMatched.join(", ")}
+                </p>
+              ) : null}
+
+              {!gapLoading &&
+              gapMissing.length === 0 &&
+              gapMatched.length > 0 &&
+              !gapError ? (
+                <p className="mt-3 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+                  No obvious missing keywords-the posting lines up with
+                  what&apos;s already in your resume. You can still add terms
+                  below.
+                </p>
+              ) : null}
+
+              {gapKeywordChips.length > 0 ? (
+                <div className="mt-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllGapKeywords}
+                      className="text-[12px] font-semibold text-[var(--color-primary)] hover:underline"
+                    >
+                      Select all
+                    </button>
+                    <span className="text-[var(--color-border)]">·</span>
+                    <button
+                      type="button"
+                      onClick={clearGapKeywordSelection}
+                      className="text-[12px] font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <ul
+                    className="flex flex-wrap gap-2"
+                    aria-label="Suggested keywords"
+                  >
+                    {gapKeywordChips.map((kw, idx) => {
+                      const checked = selectedKeywordSet.has(kw.toLowerCase());
+                      const id = `gap-kw-${idx}`;
+                      return (
+                        <li key={`${kw}-${idx}`}>
+                          <label
+                            htmlFor={id}
+                            className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition ${
+                              checked
+                                ? "border-indigo-400 bg-indigo-500/10 text-[var(--color-ink)] dark:border-indigo-500"
+                                : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-border)] dark:bg-zinc-900/40"
+                            }`}
+                          >
+                            <input
+                              id={id}
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleGapKeyword(kw)}
+                              className="size-3.5 rounded border-[var(--color-border)] text-indigo-600 focus:ring-indigo-500/30"
+                            />
+                            {kw}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-[var(--color-border)]/60 pt-4">
+                <div className="min-w-[12rem] flex-1">
+                  <label
+                    htmlFor="manual-gap-keyword"
+                    className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]"
+                  >
+                    Add keyword
+                  </label>
+                  <input
+                    id="manual-gap-keyword"
+                    type="text"
+                    value={manualKeywordDraft}
+                    onChange={(e) => setManualKeywordDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addManualGapKeyword();
+                      }
+                    }}
+                    placeholder="e.g. Django, HIPAA, SOC 2..."
+                    className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px] text-[var(--color-ink)] placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addManualGapKeyword}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-[12px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/35 dark:border-zinc-600"
+                >
+                  Add
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={addManualGapKeyword}
-                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-[12px] font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-border)]/35 dark:border-zinc-600"
-              >
-                Add
-              </button>
-            </div>
+            </details>
           </div>
 
           <details className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/40 dark:bg-zinc-900/30">
@@ -813,6 +949,11 @@ export function HomePage() {
               className="mt-5 rounded-xl border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-[13px] font-medium text-[var(--color-danger-text)]"
             >
               {error}
+            </div>
+          ) : null}
+          {journalMessage ? (
+            <div className="mt-3 rounded-xl border border-emerald-300/50 bg-emerald-500/10 px-4 py-2 text-[12px] font-medium text-emerald-700 dark:text-emerald-300">
+              {journalMessage}
             </div>
           ) : null}
 
@@ -1123,6 +1264,80 @@ export function HomePage() {
             })()
           )}
         </section>
+      ) : null}
+      {savePromptOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+          <div className="w-full max-w-xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
+            <h3 className="text-[17px] font-semibold text-[var(--color-ink)]">
+              Save this application to journal?
+            </h3>
+            <p className="mt-1 text-[13px] text-[var(--color-muted)]">
+              Edit any details, then save. Fields can stay empty.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <input
+                type="datetime-local"
+                value={journalDate}
+                onChange={(e) => setJournalDate(e.target.value)}
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px]"
+              />
+              <select
+                value={journalStatus}
+                onChange={(e) =>
+                  setJournalStatus(e.target.value as JournalStatus)
+                }
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px]"
+              >
+                {JOURNAL_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={journalCompanyName}
+                onChange={(e) => setJournalCompanyName(e.target.value)}
+                placeholder="Company name"
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px]"
+              />
+              <input
+                value={journalPosition}
+                onChange={(e) => setJournalPosition(e.target.value)}
+                placeholder="Position"
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px]"
+              />
+              <input
+                value={journalLink}
+                onChange={(e) => setJournalLink(e.target.value)}
+                placeholder="Link (job/application URL)"
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[13px] sm:col-span-2"
+              />
+            </div>
+            {!journalCompanyName.trim() ? (
+              <p className="mt-2 text-[12px] font-medium text-rose-700 dark:text-rose-300">
+                Company name is required to save.
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSavePromptOpen(false)}
+                disabled={savePromptLoading}
+                className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-[12px] font-semibold text-[var(--color-ink)]"
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveJournalEntry()}
+                disabled={savePromptLoading || !journalCompanyName.trim()}
+                className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+              >
+                {savePromptLoading ? "Saving..." : "Save to history"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </main>
   );
