@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -41,6 +42,10 @@ ANALYZE_KEYWORD_GAPS_SYSTEM = (
     "You compare a job description to a candidate resume. Extract concrete skills, "
     "tools, frameworks, platforms, methodologies, and domain keywords the posting "
     "treats as important (required or preferred).\n"
+    "Prioritize keywords explicitly listed in sections/headings such as "
+    "Qualifications, Minimum Qualifications, Basic Qualifications, Requirements, "
+    "Must Have, Preferred Qualifications, Preferred Skills, Nice to Have, and Key "
+    "Responsibilities. Use other sections only as secondary context.\n"
     "- missing_keywords: phrases important in the job but NOT clearly supported by "
     "the resume—omit items already evidenced or strong honest equivalents "
     "(e.g. React vs React.js).\n"
@@ -90,6 +95,52 @@ def _normalize_keyword_gap_lists(data: dict) -> tuple[list[str], list[str]]:
     matched_lower = {m.lower() for m in matched}
     missing = [m for m in missing if m.lower() not in matched_lower]
     return missing, matched
+
+
+def _extract_requirements_sections(job_description: str) -> tuple[str, bool]:
+    """
+    Return only requirement/preferred-like sections when headings exist.
+    If nothing is recognized, return original text with used_subset=False.
+    """
+    text = job_description.strip()
+    if not text:
+        return "", False
+
+    heading_re = re.compile(r"^\s{0,3}(#{1,6}\s*)?([A-Za-z][A-Za-z /&\-\(\)]{2,80}):?\s*$")
+    target_heading_re = re.compile(
+        r"(qualification|requirement|preferred|nice to have|must have|must-have|"
+        r"key responsibilities|responsibilit(y|ies)|what you('|’)ll bring|"
+        r"what we('|’)re looking for|skills)",
+        re.IGNORECASE,
+    )
+
+    lines = text.splitlines()
+    blocks: list[str] = []
+    current_heading: str | None = None
+    current_lines: list[str] = []
+
+    def flush():
+        nonlocal current_heading, current_lines
+        if current_heading and target_heading_re.search(current_heading):
+            body = "\n".join(current_lines).strip()
+            if body:
+                blocks.append(f"{current_heading}\n{body}")
+        current_heading = None
+        current_lines = []
+
+    for line in lines:
+        m = heading_re.match(line)
+        if m:
+            flush()
+            current_heading = m.group(2).strip()
+            continue
+        if current_heading is not None:
+            current_lines.append(line)
+    flush()
+
+    if blocks:
+        return "\n\n".join(blocks), True
+    return text, False
 
 
 def _load_default_template() -> str:
@@ -305,9 +356,11 @@ def analyze_keyword_gaps(body: AnalyzeKeywordGapsRequest) -> AnalyzeKeywordGapsR
             ),
         )
 
+    jd_for_analysis, used_subset = _extract_requirements_sections(body.job_description)
+    source_label = "requirements/preferred sections only" if used_subset else "full job description (fallback)"
     user_content = (
-        "## Job description\n"
-        f"{body.job_description.strip()}\n\n"
+        f"## Job description source ({source_label})\n"
+        f"{jd_for_analysis}\n\n"
         "## Resume\n"
         f"{body.resume.strip()}\n"
     )

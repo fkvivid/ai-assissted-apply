@@ -11,6 +11,44 @@ import { useAppSettings } from "../useAppSettings";
 const PLACEHOLDER_JOB =
   "Paste the target job description here…\n\nInclude responsibilities, requirements, and keywords so the tailored resume can align with the role.";
 
+const KEYWORD_CASE_EXACT: Record<string, string> = {
+  api: "API",
+  apis: "APIs",
+  rest: "REST",
+  graphql: "GraphQL",
+  grpc: "gRPC",
+  websocket: "WebSocket",
+  websockets: "WebSockets",
+  oauth: "OAuth",
+  jwt: "JWT",
+  okta: "Okta",
+  tls: "TLS",
+  "tls/ssl": "TLS/SSL",
+  ssl: "SSL",
+  ci: "CI",
+  cd: "CD",
+  "ci/cd": "CI/CD",
+  sql: "SQL",
+  nosql: "NoSQL",
+  aws: "AWS",
+  kyc: "KYC",
+  nginx: "Nginx",
+  fastapi: "FastAPI",
+};
+
+function normalizeKeywordLabel(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  return compact
+    .split(" ")
+    .map((word) => {
+      const exact = KEYWORD_CASE_EXACT[word.toLowerCase()];
+      if (exact) return exact;
+      return word.replace(/^[a-z]/, (m) => m.toUpperCase());
+    })
+    .join(" ");
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -148,7 +186,7 @@ export function HomePage() {
     const seen = new Set<string>();
     const out: string[] = [];
     for (const k of [...gapMissing, ...customGapKeywords]) {
-      const t = k.trim();
+      const t = normalizeKeywordLabel(k);
       if (!t) continue;
       const low = t.toLowerCase();
       if (seen.has(low)) continue;
@@ -169,12 +207,15 @@ export function HomePage() {
 
   const keywordBoostSection = useMemo(() => {
     const lines = selectedGapKeywords
-      .map((k) => k.trim())
+      .map((k) => normalizeKeywordLabel(k))
       .filter(Boolean)
       .map((k) => `- ${k}`);
     if (!lines.length) return "";
     return (
-      "## Keywords to emphasize (candidate confirmed they can honestly claim these)\n" +
+      "## Candidate-confirmed keywords to emphasize\n" +
+      "Use these naturally where evidence fits, not only in Skills. Prioritize " +
+      "Summary and relevant Experience/Projects bullets first, then Skills for " +
+      "coverage. Keep claims truthful to resume evidence and avoid stuffing.\n" +
       lines.join("\n")
     );
   }, [selectedGapKeywords]);
@@ -245,13 +286,14 @@ export function HomePage() {
   }, [jobDescription, settings.resume]);
 
   const toggleGapKeyword = useCallback((display: string) => {
-    const low = display.trim().toLowerCase();
+    const normalized = normalizeKeywordLabel(display);
+    const low = normalized.toLowerCase();
     setSelectedGapKeywords((prev) => {
       const has = prev.some((p) => p.trim().toLowerCase() === low);
       if (has) {
         return prev.filter((p) => p.trim().toLowerCase() !== low);
       }
-      return [...prev, display.trim()];
+      return [...prev, normalized];
     });
   }, []);
 
@@ -264,7 +306,7 @@ export function HomePage() {
   }, []);
 
   const addManualGapKeyword = useCallback(() => {
-    const t = manualKeywordDraft.trim();
+    const t = normalizeKeywordLabel(manualKeywordDraft);
     if (!t) return;
     const low = t.toLowerCase();
     setCustomGapKeywords((prev) => {

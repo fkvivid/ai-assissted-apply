@@ -35,6 +35,7 @@ Where the template has a Skills, Technical skills, Stack, or Core competencies s
 - Use **names and terse phrases only** — tools, languages, frameworks, methods, domains, certifications — aligned with the **job description** when the **resume** honestly supports them. Do **not** write sentences, mini-paragraphs, or “I am / responsible for” style prose in that block.
 - Keep entries **short and sharp**: scannable ATS-style keywords, not narrative. Prefer stacked lists, comma-separated lines, or pipes as the template implies; match job vocabulary without copying full sentences from the posting.
 - **Order by relevance** to this role (strongest match first within that section). Deduplicate; drop filler words.
+- Keep capitalization consistent in skills lists: each item should start uppercase (e.g., "Python", "Web Services", "FastAPI", "CI/CD"), not lowercase starts.
 
 ## ATS & output format
 7. Keep the output ATS-friendly in substance: clear sections, standard headings as the template allows. Do not add icon fonts, graphics, tables used for layout tricks, or non-text elements beyond what the template already uses. Preserve the template’s document class, packages, and macros unless a tiny fix is needed for valid LaTeX.
