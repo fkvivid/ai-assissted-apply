@@ -6,6 +6,7 @@ import {
   createApplyJournal,
   generateApplicationText,
   generateResume,
+  getApplyJournalStatus,
 } from "../api";
 import { useAppSettings } from "../useAppSettings";
 
@@ -213,6 +214,15 @@ export function HomePage() {
   const [journalMessage, setJournalMessage] = useState<string | null>(null);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [savePromptLoading, setSavePromptLoading] = useState(false);
+  const [journalStorageEnabled, setJournalStorageEnabled] = useState<
+    boolean | null
+  >(null);
+
+  useEffect(() => {
+    void getApplyJournalStatus()
+      .then((s) => setJournalStorageEnabled(s.enabled))
+      .catch(() => setJournalStorageEnabled(false));
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -473,7 +483,18 @@ export function HomePage() {
       setGenerated(out.latex);
       setModel(out.model);
       await refreshPdfPreview(out.latex);
-      if (settings.askToSaveJournalAfterGenerate) {
+      let journalOk = journalStorageEnabled;
+      if (journalOk === null) {
+        try {
+          const s = await getApplyJournalStatus();
+          journalOk = s.enabled;
+          setJournalStorageEnabled(s.enabled);
+        } catch {
+          journalOk = false;
+          setJournalStorageEnabled(false);
+        }
+      }
+      if (settings.askToSaveJournalAfterGenerate && journalOk) {
         setSavePromptOpen(true);
       }
     } catch (e) {
@@ -496,6 +517,7 @@ export function HomePage() {
     settings.useDefaultTemplate,
     settings.aiInstructions,
     settings.askToSaveJournalAfterGenerate,
+    journalStorageEnabled,
     refreshPdfPreview,
   ]);
 

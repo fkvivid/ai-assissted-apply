@@ -192,6 +192,18 @@ export async function getPdfStatus(): Promise<{
   return res.json();
 }
 
+export async function getApplyJournalStatus(): Promise<{ enabled: boolean }> {
+  const res = await fetch(`${API_BASE}/api/apply-journal/status`);
+  if (!res.ok) {
+    const msg = await readErrorMessage(
+      res,
+      "Could not check apply journal status.",
+    );
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function listApplyJournal(): Promise<ApplyJournalEntry[]> {
   const res = await fetch(`${API_BASE}/api/apply-journal`);
   if (!res.ok) {

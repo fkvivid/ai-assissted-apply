@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from openai import OpenAI
 
 from .config import settings
-from .db import get_apply_journal_collection
+from .db import get_apply_journal_collection, journal_storage_configured
 from .pdf_compile import (
     PdfCompileError,
     compile_latex_to_pdf,
@@ -172,6 +172,19 @@ def _journal_doc_to_entry(doc: dict) -> ApplyJournalEntry:
         created_at=doc["created_at"],
         updated_at=doc["updated_at"],
     )
+
+
+def _require_journal_collection():
+    collection = get_apply_journal_collection()
+    if collection is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Apply journal storage is not configured. "
+                "Set MONGODB_URI to enable saving entries."
+            ),
+        )
+    return collection
 
 
 DEFAULT_TEMPLATE = _load_default_template()
@@ -431,16 +444,23 @@ def analyze_keyword_gaps(body: AnalyzeKeywordGapsRequest) -> AnalyzeKeywordGapsR
     )
 
 
+@app.get("/api/apply-journal/status")
+def apply_journal_status() -> dict[str, bool]:
+    return {"enabled": journal_storage_configured()}
+
+
 @app.get("/api/apply-journal", response_model=list[ApplyJournalEntry])
 def list_apply_journal() -> list[ApplyJournalEntry]:
     collection = get_apply_journal_collection()
+    if collection is None:
+        return []
     docs = collection.find().sort("updated_at", -1)
     return [_journal_doc_to_entry(doc) for doc in docs]
 
 
 @app.get("/api/apply-journal/{entry_id}", response_model=ApplyJournalEntry)
 def get_apply_journal(entry_id: str) -> ApplyJournalEntry:
-    collection = get_apply_journal_collection()
+    collection = _require_journal_collection()
     try:
         obj_id = ObjectId(entry_id)
     except Exception as e:
@@ -470,7 +490,7 @@ def create_apply_journal(body: ApplyJournalCreateRequest) -> ApplyJournalEntry:
         "created_at": now,
         "updated_at": now,
     }
-    collection = get_apply_journal_collection()
+    collection = _require_journal_collection()
     result = collection.insert_one(doc)
     created = collection.find_one({"_id": result.inserted_id})
     if created is None:
@@ -489,7 +509,7 @@ def update_apply_journal(
         raise HTTPException(status_code=400, detail="Invalid journal id.") from e
     updates = body.model_dump(exclude_none=True)
     updates["updated_at"] = datetime.now(UTC)
-    collection = get_apply_journal_collection()
+    collection = _require_journal_collection()
     result = collection.update_one({"_id": obj_id}, {"$set": updates})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Journal entry not found.")
@@ -505,7 +525,7 @@ def delete_apply_journal(entry_id: str) -> dict[str, bool]:
         obj_id = ObjectId(entry_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid journal id.") from e
-    collection = get_apply_journal_collection()
+    collection = _require_journal_collection()
     result = collection.delete_one({"_id": obj_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Journal entry not found.")

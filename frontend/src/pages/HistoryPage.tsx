@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   deleteApplyJournal,
+  getApplyJournalStatus,
   listApplyJournal,
   type ApplyJournalEntry,
   updateApplyJournal,
@@ -39,6 +40,7 @@ const STATUS_BADGE_CLASS: Record<JournalStatus, string> = {
 export function HistoryPage() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<ApplyJournalEntry[]>([]);
+  const [journalEnabled, setJournalEnabled] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,7 +56,11 @@ export function HistoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listApplyJournal();
+      const [status, data] = await Promise.all([
+        getApplyJournalStatus(),
+        listApplyJournal(),
+      ]);
+      setJournalEnabled(status.enabled);
       setEntries(data);
       if (!selectedId && data.length > 0) {
         setSelectedId(data[0].id);
@@ -266,6 +272,16 @@ export function HistoryPage() {
         </div>
       ) : null}
 
+      {journalEnabled === false && !loading ? (
+        <div className="mt-5 rounded-lg border border-amber-300/80 bg-amber-500/10 px-4 py-3 text-[13px] text-amber-900 dark:border-amber-700 dark:text-amber-100">
+          Apply journal is turned off on the server. Set{" "}
+          <code className="rounded bg-black/5 px-1 dark:bg-white/10">
+            MONGODB_URI
+          </code>{" "}
+          to persist history. You can still generate resumes on Home without it.
+        </div>
+      ) : null}
+
       <div className="mt-8 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <h2 className="text-[13px] font-semibold text-[var(--color-ink)]">
@@ -319,7 +335,9 @@ export function HistoryPage() {
             </p>
           ) : entries.length === 0 ? (
             <p className="mt-3 text-[13px] text-[var(--color-muted)]">
-              No saved applications yet.
+              {journalEnabled === false
+                ? "No entries — journal storage is not configured."
+                : "No saved applications yet."}
             </p>
           ) : filteredEntries.length === 0 ? (
             <p className="mt-3 text-[13px] text-[var(--color-muted)]">

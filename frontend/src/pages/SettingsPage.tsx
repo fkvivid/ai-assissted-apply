@@ -297,7 +297,13 @@ export function SettingsPage() {
             Apply journal
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            Ask before saving a generated resume to MongoDB history.
+            Ask before saving a generated resume to history. The server persists
+            entries only when{" "}
+            <code className="rounded bg-black/5 px-1 text-[12px] dark:bg-white/10">
+              MONGODB_URI
+            </code>{" "}
+            is set; without it, no save prompt appears after generation even if
+            this is checked.
           </p>
           <label className="mt-5 flex cursor-pointer items-center gap-3 text-[13px] font-semibold text-[var(--color-ink)]">
             <input
