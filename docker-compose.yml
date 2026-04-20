@@ -1,7 +1,6 @@
 # Stack on Docker network ai-assisted-apply_net (web → api:8000 for /api).
 # Start: docker compose up --build -d
-# Optional Mongo (apply journal): docker compose --profile mongo up --build -d
-#   and set MONGODB_URI e.g. mongodb://mongo:27017/ai_assisted_apply in backend/.env
+# Optional apply journal: set MONGODB_URI in backend/.env (Atlas/local external Mongo).
 # App: http://localhost:${WEB_PORT:-8080} — API: http://127.0.0.1:${API_HOST_PORT:-8000}
 
 networks:
@@ -25,20 +24,6 @@ services:
     environment:
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173}"
       PDF_REMOTE_COMPILE_URL: "${PDF_REMOTE_COMPILE_URL:-}"
-      # Optional journal: set MONGODB_URI in .env, e.g. mongodb://mongo:27017/ai_assisted_apply
-      MONGODB_URI: "${MONGODB_URI:-}"
-    restart: unless-stopped
-
-  mongo:
-    profiles:
-      - mongo
-    image: mongo:8
-    networks:
-      - aaa
-    ports:
-      - "${MONGO_HOST_PORT:-27017}:27017"
-    volumes:
-      - mongo_data:/data/db
     restart: unless-stopped
 
   web:
@@ -53,6 +38,3 @@ services:
     depends_on:
       - api
     restart: unless-stopped
-
-volumes:
-  mongo_data:
