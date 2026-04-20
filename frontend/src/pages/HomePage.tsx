@@ -218,6 +218,18 @@ export function HomePage() {
     boolean | null
   >(null);
 
+  const resetJournalDraft = useCallback(() => {
+    setJournalDate(currentLocalDateTimeInputValue());
+    setJournalCompanyName("");
+    setJournalPosition("");
+    setJournalSalary("");
+    setJournalLocation("");
+    setJournalJobSource("");
+    setJournalLink("");
+    setJournalExpectedSalary("");
+    setJournalStatus("applied");
+  }, []);
+
   useEffect(() => {
     void getApplyJournalStatus()
       .then((s) => setJournalStorageEnabled(s.enabled))
@@ -429,6 +441,7 @@ export function HomePage() {
         status: journalStatus,
       });
       setSavePromptOpen(false);
+      resetJournalDraft();
       setJournalMessage("Saved to history.");
     } catch (e) {
       setJournalMessage(
@@ -449,6 +462,7 @@ export function HomePage() {
     journalExpectedSalary,
     jobDescription,
     journalStatus,
+    resetJournalDraft,
   ]);
 
   const handleGenerate = useCallback(async () => {
@@ -1343,7 +1357,10 @@ export function HomePage() {
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setSavePromptOpen(false)}
+                onClick={() => {
+                  setSavePromptOpen(false);
+                  resetJournalDraft();
+                }}
                 disabled={savePromptLoading}
                 className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-[12px] font-semibold text-[var(--color-ink)]"
               >

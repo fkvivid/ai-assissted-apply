@@ -51,6 +51,7 @@ export function HistoryPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<JournalStatus[]>([]);
+  const [appliedDateFilter, setAppliedDateFilter] = useState("");
 
   const loadEntries = useCallback(async () => {
     setLoading(true);
@@ -83,10 +84,15 @@ export function HistoryPage() {
 
   const filteredEntries = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
+    const targetDate = appliedDateFilter.trim();
     return entries.filter((entry) => {
       const statusOk =
         statusFilter.length === 0 || statusFilter.includes(entry.status);
       if (!statusOk) return false;
+      if (targetDate) {
+        const normalizedDate = entry.date.trim().slice(0, 10);
+        if (normalizedDate !== targetDate) return false;
+      }
       if (!q) return true;
       const hay = [
         entry.company_name,
@@ -101,7 +107,7 @@ export function HistoryPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [entries, searchTerm, statusFilter]);
+  }, [entries, searchTerm, statusFilter, appliedDateFilter]);
 
   useEffect(() => {
     if (!selected) {
@@ -294,6 +300,23 @@ export function HistoryPage() {
               placeholder="Search company, role, source..."
               className={inputClass}
             />
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input
+                type="date"
+                value={appliedDateFilter}
+                onChange={(e) => setAppliedDateFilter(e.target.value)}
+                className={inputClass}
+              />
+              {appliedDateFilter ? (
+                <button
+                  type="button"
+                  onClick={() => setAppliedDateFilter("")}
+                  className="rounded-xl border border-[var(--color-border)] px-3 py-2 text-[12px] font-semibold text-[var(--color-muted)] hover:bg-[var(--color-surface-elevated)]"
+                >
+                  Clear date
+                </button>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {JOURNAL_STATUS_OPTIONS.map((option) => {
                 const active = statusFilter.includes(option.value);
@@ -312,12 +335,13 @@ export function HistoryPage() {
                   </button>
                 );
               })}
-              {(searchTerm || statusFilter.length > 0) && (
+              {(searchTerm || statusFilter.length > 0 || appliedDateFilter) && (
                 <button
                   type="button"
                   onClick={() => {
                     setSearchTerm("");
                     setStatusFilter([]);
+                    setAppliedDateFilter("");
                   }}
                   className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-muted)] hover:bg-[var(--color-surface-elevated)]"
                 >
@@ -325,9 +349,17 @@ export function HistoryPage() {
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-[var(--color-muted)]">
-              {filteredEntries.length} of {entries.length} entries
-            </p>
+            {appliedDateFilter ? (
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {filteredEntries.length} application
+                {filteredEntries.length === 1 ? "" : "s"} on {appliedDateFilter}
+                {" "}({entries.length} total)
+              </p>
+            ) : (
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {filteredEntries.length} of {entries.length} entries
+              </p>
+            )}
           </div>
           {loading ? (
             <p className="mt-3 text-[13px] text-[var(--color-muted)]">
