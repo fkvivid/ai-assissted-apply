@@ -1,5 +1,6 @@
 %==============================================================
-% Resume Template — ATS-friendly LaTeX
+% Resume Template
+% ATS-friendly, tighter spacing
 %==============================================================
 
 \documentclass[letterpaper,10pt]{article}
@@ -44,135 +45,96 @@
 }
 
 \pagestyle{empty}
-\setcounter{secnumdepth}{0}
 
-%==============================================================
-% Custom Commands
-%==============================================================
-
-\newcommand{\name}[1]{
-  {\fontsize{19}{21}\selectfont\bfseries\color{accent} #1}
-}
-
-\newcommand{\headline}[1]{
-  {\small #1}
-}
-
-\newcommand{\contact}[1]{
-  {\small #1}
-}
-
-\newcommand{\summarytext}[1]{
-  {\small #1}
-}
-
-\newcommand{\skillline}[2]{
-  \textbf{#1} #2
-}
-
+% Commands
 \newcommand{\jobheading}[3]{
-\noindent
-\begin{tabularx}{\linewidth}{@{}X r@{}}
-{\bfseries\color{accent} #1 \;{\small\color{mutedtext}|}\; \bfseries #2} & {\small #3}
-\end{tabularx}\vspace{-4pt}
+  \noindent
+  \begin{minipage}[t]{0.75\linewidth}
+    \textbf{\color{accent} #1} {\small\color{mutedtext}|} \textbf{#2}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}[t]{0.22\linewidth}
+    \raggedleft\small #3
+  \end{minipage}
+  \vspace{-10pt}
 }
 
-\newcommand{\projectheading}[3]{
-\noindent
-\begin{tabularx}{\linewidth}{@{}X r@{}}
-{\bfseries\color{accent} #1 \;{\small\color{mutedtext}|}\; #2} & {\small #3}
-\end{tabularx}\vspace{-4pt}
-}
-
-%==============================================================
 \begin{document}
 
-% HEADER
 \begin{center}
-\name{YOUR NAME HERE}\\[2pt]
-\headline{Your Title \;|\; Specialty 1 \;|\; Specialty 2}\\[3pt]
-\contact{
+{\fontsize{19}{21}\selectfont\bfseries\color{accent} YOUR NAME}\\[2pt]
+{\small Your Title \;|\; Specialty 1 \;|\; Specialty 2}\\[3pt]
+\small
 City, State \;|\; Phone Number \;|\;
-\href{mailto:your@email.com}{your@email.com} \;|\;
+\href{mailto:youremail@example.com}{youremail@example.com} \;|\;
 \href{https://linkedin.com/in/yourprofile}{linkedin.com/in/yourprofile} \;|\;
-\href{https://yourportfolio.com}{yourportfolio.com}
-}\\[2pt]
-\textit{Work authorization / relocation / availability line}
+\href{https://yourwebsite.com}{yourwebsite.com}\\[2pt]
 \end{center}
 
 % SUMMARY
-\summarytext{
-Write a 2--4 sentence professional summary here. Focus on years of experience, technical strengths, industries, and impact.
+{\small
+Write your professional summary here. Keep it concise and focused on your experience, strengths, and the kind of systems or products you build.
 }
 
 % SKILLS
 \section{Skills}
+
 {\small
-\skillline{Languages:}{JavaScript, TypeScript, Python, Go, SQL, Bash}
+\textbf{Languages:}
 
-\skillline{Frameworks:}{React, Next.js, Node.js, Express.js, Angular}
+\textbf{Frameworks:}
 
-\skillline{Cloud \& DevOps:}{AWS, Kubernetes, Docker, Terraform, GitHub Actions}
+\textbf{Cloud \& DevOps:}
 
-\skillline{Databases:}{PostgreSQL, MySQL, MongoDB, DynamoDB, Redis}
+\textbf{Databases:}
 
-\skillline{Web \& Services:}{REST, GraphQL, gRPC, WebSockets, Nginx}
+\textbf{Web \& Services:}
 
-\skillline{Tools \& Practices:}{Git, Linux, CI/CD, Agile, Jest}
+\textbf{Tools \& Practices:}
 
-\skillline{AI Tools:}{OpenAI API, Claude, Gemini, Cursor}
+\textbf{AI Tools:}
 }
 
 % EXPERIENCE
 \section{Experience}
 
-\jobheading{Job Title}{Company Name}{Month Year -- Present}
+\jobheading{Job Title}{Company Name}{Start Date -- End Date}
 \begin{itemize}
-  \item Achievement or responsibility with business or technical impact.
-  \item Achievement or responsibility with scale, performance, reliability, or ownership.
-  \item Achievement or responsibility with measurable result if possible.
-  \item Cross-functional or leadership contribution.
+  \item Achievement or responsibility
+  \item Achievement or responsibility
+  \item Achievement or responsibility
 \end{itemize}
 
-\jobheading{Job Title}{Company Name}{Month Year -- Month Year}
+\jobheading{Job Title}{Company Name}{Start Date -- End Date}
 \begin{itemize}
-  \item Achievement or responsibility with business or technical impact.
-  \item Achievement or responsibility with scale, performance, reliability, or ownership.
-  \item Achievement or responsibility with measurable result if possible.
-  \item Cross-functional or leadership contribution.
-\end{itemize}
-
-\jobheading{Job Title}{Company Name}{Month Year -- Month Year}
-\begin{itemize}
-  \item Achievement or responsibility with business or technical impact.
-  \item Achievement or responsibility with scale, performance, reliability, or ownership.
-  \item Achievement or responsibility with measurable result if possible.
+  \item Achievement or responsibility
+  \item Achievement or responsibility
+  \item Achievement or responsibility
 \end{itemize}
 
 % PROJECTS
-\section{Projects}
+\section{Key Projects}
 
-\projectheading{Project Name}{Tech Stack}{\href{https://github.com/yourrepo}{GitHub}}
+\jobheading{Project Name}{Tech Stack}{\href{https://github.com/yourproject}{Link}}
 \begin{itemize}
-  \item One strong line describing what the project does, how it works, and why it matters.
+  \item Brief description of the project and your contribution
 \end{itemize}
 
-\projectheading{Project Name}{Tech Stack}{\href{https://yourdemo.com}{Live Demo}}
+\jobheading{Project Name}{Tech Stack}{\href{https://yourdemo.com}{Live Demo}}
 \begin{itemize}
-  \item One strong line describing architecture, deployment, or technical depth.
+  \item Brief description of the project and your contribution
 \end{itemize}
 
 % CERTIFICATIONS
 \section{Certifications}
 \begin{tabularx}{\linewidth}{@{}X r@{}}
-Certification Name & Month Year \\
-Certification Name & Month Year \\
-Certification Name & Month Year \\
+Certification Name & Date \\
+Certification Name & Date \\
 \end{tabularx}
 
 % EDUCATION
 \section{Education}
-\jobheading{Degree Name}{University Name}{City, State}
-\jobheading{Degree Name}{University Name}{City, Country}
+\jobheading{Degree Name}{University Name}{Graduation Date}
+\jobheading{Degree Name}{University Name}{Graduation Date}
 
 \end{document}

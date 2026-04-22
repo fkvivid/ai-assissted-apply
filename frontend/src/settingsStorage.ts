@@ -39,10 +39,11 @@ Where the template has a Skills, Technical skills, Stack, or Core competencies s
 
 ## ATS & output format
 7. Keep the output ATS-friendly in substance: clear sections, standard headings as the template allows. Do not add icon fonts, graphics, tables used for layout tricks, or non-text elements beyond what the template already uses. Preserve the template’s document class, packages, and macros unless a tiny fix is needed for valid LaTeX.
+8. Target a single-page resume whenever possible. Keep bullets concise, prioritize the strongest and most relevant evidence, and avoid repeating similar points. If one page is not realistic, still minimize overflow.
 
 ## LaTeX rules
-8. Return a single valid, complete LaTeX file that fills the provided template. No markdown code fences. No commentary before or after the LaTeX.
-9. In visible text and bullets, escape LaTeX specials: use \\_ \\# \\$ \\% \\& \\{ \\} for _ # $ % & { } in plain text; use \\href{https://...}{link text} with a short link label. Never leave raw underscores or ampersands in running text outside math or URLs.`;
+9. Return a single valid, complete LaTeX file that fills the provided template. No markdown code fences. No commentary before or after the LaTeX.
+10. In visible text and bullets, escape LaTeX specials: use \\_ \\# \\$ \\% \\& \\{ \\} for _ # $ % & { } in plain text; use \\href{https://...}{link text} with a short link label. Never leave raw underscores or ampersands in running text outside math or URLs.`;
 
 export type AppSettings = {
   userName: string;
