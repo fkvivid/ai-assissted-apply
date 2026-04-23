@@ -142,3 +142,10 @@ class ApplyJournalEntry(BaseModel):
     status: ApplicationStatus = "applied"
     created_at: datetime
     updated_at: datetime
+
+
+class ApplyJournalListResponse(BaseModel):
+    items: list[ApplyJournalEntry] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 20

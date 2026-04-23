@@ -38,8 +38,11 @@ const STATUS_BADGE_CLASS: Record<JournalStatus, string> = {
 };
 
 export function HistoryPage() {
+  const PAGE_SIZE = 20;
   const navigate = useNavigate();
   const [entries, setEntries] = useState<ApplyJournalEntry[]>([]);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [journalEnabled, setJournalEnabled] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,19 +62,20 @@ export function HistoryPage() {
     try {
       const [status, data] = await Promise.all([
         getApplyJournalStatus(),
-        listApplyJournal(),
+        listApplyJournal(currentPage, PAGE_SIZE),
       ]);
       setJournalEnabled(status.enabled);
-      setEntries(data);
-      if (!selectedId && data.length > 0) {
-        setSelectedId(data[0].id);
+      setEntries(data.items);
+      setTotalEntries(data.total);
+      if (!selectedId && data.items.length > 0) {
+        setSelectedId(data.items[0].id);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load history.");
     } finally {
       setLoading(false);
     }
-  }, [selectedId]);
+  }, [selectedId, currentPage]);
 
   useEffect(() => {
     void loadEntries();
@@ -353,11 +357,11 @@ export function HistoryPage() {
               <p className="text-[11px] text-[var(--color-muted)]">
                 {filteredEntries.length} application
                 {filteredEntries.length === 1 ? "" : "s"} on {appliedDateFilter}
-                {" "}({entries.length} total)
+                {" "}({totalEntries} total)
               </p>
             ) : (
               <p className="text-[11px] text-[var(--color-muted)]">
-                {filteredEntries.length} of {entries.length} entries
+                {filteredEntries.length} of {totalEntries} entries
               </p>
             )}
           </div>
@@ -376,38 +380,70 @@ export function HistoryPage() {
               No entries match the current filters.
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
-              {filteredEntries.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(entry.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-[12px] transition ${
-                      entry.id === selectedId
-                        ? "border-indigo-400 bg-indigo-500/10"
-                        : "border-[var(--color-border)] hover:bg-[var(--color-surface-elevated)]"
-                    }`}
-                  >
-                    <p className="font-semibold text-[var(--color-ink)]">
-                      {entry.company_name || "Untitled company"}
-                    </p>
-                    <p className="mt-1 text-[var(--color-muted)]">
-                      {entry.position || "Untitled position"}
-                    </p>
-                    <span
-                      className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        STATUS_BADGE_CLASS[entry.status]
+            <>
+              <ul className="mt-3 space-y-2">
+                {filteredEntries.map((entry) => (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(entry.id)}
+                      className={`w-full rounded-xl border px-3 py-2 text-left text-[12px] transition ${
+                        entry.id === selectedId
+                          ? "border-indigo-400 bg-indigo-500/10"
+                          : "border-[var(--color-border)] hover:bg-[var(--color-surface-elevated)]"
                       }`}
                     >
-                      {entry.status}
-                    </span>
-                    <p className="mt-1 text-[var(--color-muted)]">
-                      {entry.date || "No date"}
-                    </p>
+                      <p className="font-semibold text-[var(--color-ink)]">
+                        {entry.company_name || "Untitled company"}
+                      </p>
+                      <p className="mt-1 text-[var(--color-muted)]">
+                        {entry.position || "Untitled position"}
+                      </p>
+                      <span
+                        className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                          STATUS_BADGE_CLASS[entry.status]
+                        }`}
+                      >
+                        {entry.status}
+                      </span>
+                      <p className="mt-1 text-[var(--color-muted)]">
+                        {entry.date || "No date"}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-3">
+                <p className="text-[11px] text-[var(--color-muted)]">
+                  Page {currentPage} of{" "}
+                  {Math.max(1, Math.ceil(totalEntries / PAGE_SIZE))}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1 || loading}
+                    className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-ink)] disabled:opacity-50"
+                  >
+                    Prev
                   </button>
-                </li>
-              ))}
-            </ul>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentPage((p) =>
+                        p < Math.ceil(totalEntries / PAGE_SIZE) ? p + 1 : p,
+                      )
+                    }
+                    disabled={
+                      currentPage >= Math.ceil(totalEntries / PAGE_SIZE) || loading
+                    }
+                    className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-ink)] disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </section>
 

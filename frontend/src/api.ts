@@ -83,6 +83,12 @@ export type ApplyJournalCreateRequest = {
 };
 
 export type ApplyJournalUpdateRequest = Partial<ApplyJournalCreateRequest>;
+export type ApplyJournalListResponse = {
+  items: ApplyJournalEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+};
 
 function parseDetailPayload(err: { detail?: unknown }): string {
   const d = err.detail;
@@ -204,8 +210,15 @@ export async function getApplyJournalStatus(): Promise<{ enabled: boolean }> {
   return res.json();
 }
 
-export async function listApplyJournal(): Promise<ApplyJournalEntry[]> {
-  const res = await fetch(`${API_BASE}/api/apply-journal`);
+export async function listApplyJournal(
+  page = 1,
+  pageSize = 20,
+): Promise<ApplyJournalListResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  const res = await fetch(`${API_BASE}/api/apply-journal?${params.toString()}`);
   if (!res.ok) {
     const msg = await readErrorMessage(res, "Could not load apply journal.");
     throw new Error(msg);

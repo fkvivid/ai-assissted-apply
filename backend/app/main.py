@@ -3,7 +3,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -24,6 +24,7 @@ from .schemas import (
     AnalyzeKeywordGapsResponse,
     ApplyJournalCreateRequest,
     ApplyJournalEntry,
+    ApplyJournalListResponse,
     ApplyJournalUpdateRequest,
     CompilePdfRequest,
     GenerateApplicationTextRequest,
@@ -449,13 +450,28 @@ def apply_journal_status() -> dict[str, bool]:
     return {"enabled": journal_storage_configured()}
 
 
-@app.get("/api/apply-journal", response_model=list[ApplyJournalEntry])
-def list_apply_journal() -> list[ApplyJournalEntry]:
+@app.get("/api/apply-journal", response_model=ApplyJournalListResponse)
+def list_apply_journal(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> ApplyJournalListResponse:
     collection = get_apply_journal_collection()
     if collection is None:
-        return []
-    docs = collection.find().sort("updated_at", -1)
-    return [_journal_doc_to_entry(doc) for doc in docs]
+        return ApplyJournalListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+        )
+    skip = (page - 1) * page_size
+    total = collection.count_documents({})
+    docs = collection.find().sort("created_at", -1).skip(skip).limit(page_size)
+    return ApplyJournalListResponse(
+        items=[_journal_doc_to_entry(doc) for doc in docs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @app.get("/api/apply-journal/{entry_id}", response_model=ApplyJournalEntry)
