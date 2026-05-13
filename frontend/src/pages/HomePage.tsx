@@ -1215,8 +1215,7 @@ export function HomePage() {
                       Prompt / employer question
                     </label>
                     <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-muted)]">
-                      Describe what you need (cover letter angle) or paste the
-                      exact question—e.g. why this company, or a team intro box.
+                      Type what you need or paste the exact employer question. Works for cover letters, cold emails, LinkedIn messages, application questions, or team intros. Output is always clean prose — no bullet points or dashes.
                     </p>
                     <textarea
                       id={`extra-prompt-${row.id}`}
@@ -1225,7 +1224,7 @@ export function HomePage() {
                         updateExtraOutput(row.id, { prompt: e.target.value })
                       }
                       rows={10}
-                      placeholder='Example: "What interests you about working for this company?" or paste the full Helium intro prompt…'
+                      placeholder={'Cover letter · Cold email · LinkedIn message · Application question · Team intro\n\nPaste the prompt or describe what you need…'}
                       className="mt-2 min-h-[200px] flex-1 resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-input)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--color-ink)] shadow-inner placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:placeholder:text-zinc-500 lg:min-h-[280px]"
                       spellCheck
                     />
