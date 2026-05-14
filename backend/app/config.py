@@ -8,8 +8,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
+    # Vercel AI Gateway (OpenAI-compatible). See https://vercel.com/docs/ai-gateway
+    ai_gateway_api_key: str = ""
+    ai_gateway_base_url: str = "https://ai-gateway.vercel.sh/v1"
+    ai_default_model: str = "openai/gpt-5.4"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # If set (e.g. http://pdf-engine:8080), compile PDF via HTTP multipart POST
     # instead of a local engine. Matches 4teamwork/pdflatex and similar images.

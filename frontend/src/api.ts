@@ -7,6 +7,8 @@ export type GenerateRequest = {
   use_default_template: boolean;
   ai_instructions: string;
   additional_instructions: string;
+  /** Main-task gateway id (resume + keyword gaps). Empty → server AI_DEFAULT_MODEL */
+  model?: string;
 };
 
 export type GenerateResponse = {
@@ -19,6 +21,8 @@ export type GenerateApplicationTextRequest = {
   job_description: string;
   additional_instructions: string;
   task_prompt: string;
+  /** Other-task gateway id (cover letters, etc.). Empty → server AI_DEFAULT_MODEL */
+  model?: string;
 };
 
 export type GenerateApplicationTextResponse = {
@@ -29,6 +33,47 @@ export type GenerateApplicationTextResponse = {
 export type AnalyzeKeywordGapsRequest = {
   job_description: string;
   resume: string;
+  /** Same as main-task model on the home page */
+  model?: string;
+};
+
+export type CompareResumeJobMatchRequest = {
+  job_description: string;
+  resume_original: string;
+  resume_new_latex: string;
+  /** Other-task model for scoring */
+  model?: string;
+};
+
+export type CompareResumeJobMatchResponse = {
+  job_match_old: number;
+  job_match_new: number;
+  keywords_old: number;
+  keywords_new: number;
+  role_fit_old: number;
+  role_fit_new: number;
+  evidence_old: number;
+  evidence_new: number;
+  match_lift: number;
+  headline: string;
+  summary: string;
+  what_improved: string[];
+  still_watch: string[];
+  model: string;
+};
+
+export type AiStatus = {
+  configured: boolean;
+  mode: string;
+  default_model: string;
+  providers: string[];
+};
+
+export type ModelInfo = {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
 };
 
 export type AnalyzeKeywordGapsResponse = {
@@ -125,6 +170,42 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
     /* ignore */
   }
   return fallback;
+}
+
+export async function getAiStatus(): Promise<AiStatus> {
+  const res = await fetch(`${API_BASE}/api/ai-status`);
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, res.statusText);
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function listModels(): Promise<{
+  items: ModelInfo[];
+  default_model?: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/models`);
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, res.statusText);
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function compareResumeJobMatch(
+  body: CompareResumeJobMatchRequest,
+): Promise<CompareResumeJobMatchResponse> {
+  const res = await fetch(`${API_BASE}/api/compare-resume-job-match`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const msg = await readErrorMessage(res, res.statusText);
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
+  return res.json();
 }
 
 export async function generateResume(

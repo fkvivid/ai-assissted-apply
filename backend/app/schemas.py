@@ -25,6 +25,10 @@ class GenerateRequest(BaseModel):
         default="",
         description="Optional per-job extra instructions from homepage",
     )
+    model: str = Field(
+        default="",
+        description="Gateway model id for resume + keyword gaps; empty uses AI_DEFAULT_MODEL",
+    )
 
 
 class GenerateResponse(BaseModel):
@@ -48,6 +52,10 @@ class GenerateApplicationTextRequest(BaseModel):
         min_length=1,
         description="What to write: cover letter brief, employer question, or pasted prompt",
     )
+    model: str = Field(
+        default="",
+        description="Gateway model id for application prose; empty uses AI_DEFAULT_MODEL",
+    )
 
 
 class GenerateApplicationTextResponse(BaseModel):
@@ -67,6 +75,10 @@ class CompilePdfRequest(BaseModel):
 class AnalyzeKeywordGapsRequest(BaseModel):
     job_description: str = Field(..., min_length=1, description="Target job posting text")
     resume: str = Field(..., min_length=1, description="Candidate resume (compare for coverage)")
+    model: str = Field(
+        default="",
+        description="Optional gateway model id; empty uses server AI_DEFAULT_MODEL",
+    )
 
 
 class AnalyzeKeywordGapsResponse(BaseModel):
@@ -79,6 +91,46 @@ class AnalyzeKeywordGapsResponse(BaseModel):
         description="JD skills/terms that clearly appear or are honest equivalents in the resume",
     )
     model: str
+
+
+class CompareResumeJobMatchRequest(BaseModel):
+    job_description: str = Field(..., min_length=1, description="Target job posting")
+    resume_original: str = Field(
+        ...,
+        min_length=1,
+        description="Pre-tailoring resume text (source of truth for 'before')",
+    )
+    resume_new_latex: str = Field(
+        ...,
+        min_length=1,
+        description="Generated tailored resume (LaTeX; model should read visible content)",
+    )
+    model: str = Field(
+        default="",
+        description="Gateway model id for JD match scoring; empty uses AI_DEFAULT_MODEL",
+    )
+
+
+class CompareResumeJobMatchResponse(BaseModel):
+    """JD alignment scores for original vs tailored resume (0–100 per axis)."""
+
+    job_match_old: int = Field(..., ge=0, le=100)
+    job_match_new: int = Field(..., ge=0, le=100)
+    keywords_old: int = Field(..., ge=0, le=100)
+    keywords_new: int = Field(..., ge=0, le=100)
+    role_fit_old: int = Field(..., ge=0, le=100)
+    role_fit_new: int = Field(..., ge=0, le=100)
+    evidence_old: int = Field(..., ge=0, le=100)
+    evidence_new: int = Field(..., ge=0, le=100)
+    match_lift: int = Field(
+        ...,
+        description="job_match_new minus job_match_old (can be negative)",
+    )
+    headline: str = ""
+    summary: str = ""
+    what_improved: list[str] = Field(default_factory=list)
+    still_watch: list[str] = Field(default_factory=list)
+    model: str = ""
 
 
 ApplicationStatus = Literal[

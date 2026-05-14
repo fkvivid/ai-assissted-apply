@@ -2,16 +2,32 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   analyzeKeywordGaps,
+  compareResumeJobMatch,
   compilePdf,
   createApplyJournal,
   generateApplicationText,
   generateResume,
   getApplyJournalStatus,
+  type CompareResumeJobMatchResponse,
 } from "../api";
 import { useAppSettings } from "../useAppSettings";
+import { ModelSelector, DEFAULT_MODEL_ID } from "../components/ModelSelector";
+import { ResumeMatchInsights } from "../components/ResumeMatchInsights";
 
 const PLACEHOLDER_JOB =
   "Paste the target job description here…\n\nInclude responsibilities, requirements, and keywords so the tailored resume can align with the role.";
+
+const LS_AI_MODEL = "aaa-ai-model";
+
+function readStoredModel(key: string): string {
+  if (typeof localStorage === "undefined") return "";
+  try {
+    const v = localStorage.getItem(key);
+    return typeof v === "string" ? v : "";
+  } catch {
+    return "";
+  }
+}
 
 const KEYWORD_CASE_EXACT: Record<string, string> = {
   api: "API",
@@ -176,6 +192,9 @@ export function HomePage() {
   const navigate = useNavigate();
   const { settings } = useAppSettings();
   const [jobDescription, setJobDescription] = useState("");
+  const [aiModel, setAiModel] = useState(
+    () => readStoredModel(LS_AI_MODEL) || DEFAULT_MODEL_ID,
+  );
   const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [generated, setGenerated] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
@@ -217,6 +236,10 @@ export function HomePage() {
   const [journalStorageEnabled, setJournalStorageEnabled] = useState<
     boolean | null
   >(null);
+  const [matchInsight, setMatchInsight] =
+    useState<CompareResumeJobMatchResponse | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
 
   const resetJournalDraft = useCallback(() => {
     setJournalDate(currentLocalDateTimeInputValue());
@@ -235,6 +258,14 @@ export function HomePage() {
       .then((s) => setJournalStorageEnabled(s.enabled))
       .catch(() => setJournalStorageEnabled(false));
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_AI_MODEL, aiModel);
+    } catch {
+      /* ignore */
+    }
+  }, [aiModel]);
 
   useEffect(() => {
     return () => {
@@ -360,6 +391,33 @@ export function HomePage() {
     }
   }, []);
 
+  const fetchJobMatchInsight = useCallback(
+    async (latex: string) => {
+      if (!jobDescription.trim() || !settings.resume.trim() || !latex.trim()) {
+        return;
+      }
+      setMatchLoading(true);
+      setMatchError(null);
+      setMatchInsight(null);
+      try {
+        const out = await compareResumeJobMatch({
+          job_description: jobDescription,
+          resume_original: settings.resume,
+          resume_new_latex: latex,
+          model: aiModel.trim() || DEFAULT_MODEL_ID,
+        });
+        setMatchInsight(out);
+      } catch (e) {
+        setMatchError(
+          e instanceof Error ? e.message : "Could not score job match.",
+        );
+      } finally {
+        setMatchLoading(false);
+      }
+    },
+    [jobDescription, settings.resume, aiModel],
+  );
+
   const handleAnalyzeGaps = useCallback(async () => {
     setGapPanelOpen(true);
     setGapError(null);
@@ -372,6 +430,7 @@ export function HomePage() {
       const out = await analyzeKeywordGaps({
         job_description: jobDescription,
         resume: settings.resume,
+        model: aiModel.trim() || DEFAULT_MODEL_ID,
       });
       setGapMissing(out.missing_keywords);
       setGapMatched(out.matched_keywords);
@@ -386,7 +445,7 @@ export function HomePage() {
     } finally {
       setGapLoading(false);
     }
-  }, [jobDescription, settings.resume]);
+  }, [jobDescription, settings.resume, aiModel]);
 
   const toggleGapKeyword = useCallback((display: string) => {
     const normalized = normalizeKeywordLabel(display);
@@ -472,6 +531,9 @@ export function HomePage() {
       setError("Paste a job description first.");
       return;
     }
+    setMatchInsight(null);
+    setMatchError(null);
+    setMatchLoading(false);
     setLoading(true);
     setGenerated(null);
     setModel(null);
@@ -493,10 +555,12 @@ export function HomePage() {
         use_default_template: settings.useDefaultTemplate,
         ai_instructions: settings.aiInstructions,
         additional_instructions: effectiveAdditionalInstructions,
+        model: aiModel.trim() || DEFAULT_MODEL_ID,
       });
       setGenerated(out.latex);
       setModel(out.model);
       await refreshPdfPreview(out.latex);
+      void fetchJobMatchInsight(out.latex);
       let journalOk = journalStorageEnabled;
       if (journalOk === null) {
         try {
@@ -514,6 +578,9 @@ export function HomePage() {
     } catch (e) {
       setGenerated(null);
       setModel(null);
+      setMatchInsight(null);
+      setMatchError(null);
+      setMatchLoading(false);
       setPdfObjectUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -533,6 +600,8 @@ export function HomePage() {
     settings.askToSaveJournalAfterGenerate,
     journalStorageEnabled,
     refreshPdfPreview,
+    aiModel,
+    fetchJobMatchInsight,
   ]);
 
   const handleDownloadTex = useCallback(() => {
@@ -629,6 +698,7 @@ export function HomePage() {
           job_description: jobDescription,
           additional_instructions: effectiveAdditionalInstructions,
           task_prompt: prompt,
+          model: aiModel.trim() || DEFAULT_MODEL_ID,
         });
         updateExtraOutput(id, {
           text: out.text,
@@ -648,6 +718,7 @@ export function HomePage() {
       jobDescription,
       settings.resume,
       updateExtraOutput,
+      aiModel,
     ],
   );
 
@@ -679,7 +750,11 @@ export function HomePage() {
   );
 
   const showOutputWorkspace =
-    generated !== null || extraOutputs.length > 0;
+    generated !== null ||
+    extraOutputs.length > 0 ||
+    matchLoading ||
+    matchInsight !== null ||
+    matchError !== null;
 
   if (!settings.resume.trim()) {
     return (
@@ -706,8 +781,9 @@ export function HomePage() {
             </span>
           </h1>
           <p className="max-w-md text-[15px] leading-relaxed text-[var(--color-muted)]">
-            Paste the role&apos;s posting and generate LaTeX that mirrors your
-            saved profile — structured, honest, and aligned with the job.
+            Paste a job posting, tailor your LaTeX resume to the role, scan for
+            missing keywords, draft cover letters — and see how well your new
+            version lines up with the posting when you&apos;re done.
           </p>
           <div className="flex flex-wrap gap-2.5">
             <span className="inline-flex items-center rounded-full bg-[var(--color-badge-1-bg)] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-badge-1-text)]">
@@ -770,6 +846,10 @@ export function HomePage() {
               {jobDescription.trim().split(/\s+/).length} words
             </p>
           ) : null}
+
+          <div className="mt-5">
+            <ModelSelector value={aiModel} onChange={setAiModel} />
+          </div>
 
           <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)]/50 p-4 dark:bg-zinc-900/25">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -994,11 +1074,15 @@ export function HomePage() {
           ) : null}
 
           <p className="mt-5 text-[11px] leading-relaxed text-[var(--color-muted)]">
-            Server:{" "}
+            Server: configure your LLM key in{" "}
             <code className="rounded-md bg-[var(--color-code-bg)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-ink)]">
-              OPENAI_API_KEY
+              backend/.env
+            </code>{" "}
+            (see{" "}
+            <code className="rounded-md bg-[var(--color-code-bg)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-ink)]">
+              .env.example
             </code>
-            . PDF preview needs LaTeX on the API (included in Docker). Details: README.
+            ). PDF preview needs LaTeX on the API (included in Docker); see README.
           </p>
         </div>
       </div>
@@ -1015,6 +1099,17 @@ export function HomePage() {
             “why this company,” team intros, or any pasted employer prompt—each
             tab has its own prompt and generated text.
           </p>
+
+          <ResumeMatchInsights
+            data={matchInsight}
+            loading={matchLoading}
+            error={matchError}
+            onRetry={
+              generated?.trim()
+                ? () => void fetchJobMatchInsight(generated)
+                : undefined
+            }
+          />
 
           <div
             className="mt-5 flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] pb-3"

@@ -3,6 +3,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,8 @@ from .schemas import (
     ApplyJournalEntry,
     ApplyJournalListResponse,
     ApplyJournalUpdateRequest,
+    CompareResumeJobMatchRequest,
+    CompareResumeJobMatchResponse,
     CompilePdfRequest,
     GenerateApplicationTextRequest,
     GenerateApplicationTextResponse,
@@ -87,6 +90,30 @@ ANALYZE_KEYWORD_GAPS_SYSTEM = (
     "(arrays of strings). No markdown or commentary."
 )
 
+MATCH_RESUME_JOB_SYSTEM = (
+    "You score how well TWO resume versions align with the SAME job description. "
+    "The OLD version is plain text from the candidate before tailoring. "
+    "The NEW version is LaTeX from a tailored resume—read visible text, section titles, "
+    "and bullets; ignore LaTeX syntax noise.\n\n"
+    "Score each axis from 0–100 (integers only):\n"
+    "- job_match: holistic recruiter scan fit for this posting.\n"
+    "- keywords_alignment: required/preferred skills and JD vocabulary reflected with honest evidence.\n"
+    "- role_fit: seniority, scope, and domain match.\n"
+    "- evidence_clarity: concrete outcomes, tools, and credibility (not generic filler).\n\n"
+    "Respond with ONLY a JSON object with these exact keys:\n"
+    "job_match_score_old, job_match_score_new (integers),\n"
+    "keywords_alignment_old, keywords_alignment_new,\n"
+    "role_fit_old, role_fit_new,\n"
+    "evidence_clarity_old, evidence_clarity_new,\n"
+    "headline (one punchy line celebrating the delta or honest outcome),\n"
+    "summary (2–4 sentences comparing before vs after),\n"
+    "what_improved (array of up to 6 short strings—specific wins in the NEW resume vs OLD),\n"
+    "still_watch (array of up to 5 short strings—remaining gaps or risks; empty if none).\n"
+    "Output rules: reply with a single JSON object only—no markdown code fences, no "
+    "explanation before or after. The first character of your reply must be { and the "
+    "last must be }."
+)
+
 
 def _strip_llm_json_fence(raw: str) -> str:
     t = raw.strip()
@@ -98,6 +125,27 @@ def _strip_llm_json_fence(raw: str) -> str:
             lines = lines[:-1]
         t = "\n".join(lines).strip()
     return t
+
+
+def _parse_llm_json_object(raw: str) -> dict:
+    """Parse a JSON object from model text; tolerate ``` fences and brief preamble/epilogue."""
+    t = _strip_llm_json_fence(raw.strip())
+    try:
+        out = json.loads(t)
+        if isinstance(out, dict):
+            return out
+    except json.JSONDecodeError:
+        pass
+    start = t.find("{")
+    end = t.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            out = json.loads(t[start : end + 1])
+            if isinstance(out, dict):
+                return out
+        except json.JSONDecodeError:
+            pass
+    raise ValueError("Model did not return a parseable JSON object.")
 
 
 def _normalize_keyword_gap_lists(data: dict) -> tuple[list[str], list[str]]:
@@ -126,6 +174,36 @@ def _normalize_keyword_gap_lists(data: dict) -> tuple[list[str], list[str]]:
     matched_lower = {m.lower() for m in matched}
     missing = [m for m in missing if m.lower() not in matched_lower]
     return missing, matched
+
+
+def _clamp_int_score(v: object, default: int = 50) -> int:
+    if isinstance(v, bool):
+        return default
+    if isinstance(v, int):
+        return max(0, min(100, v))
+    if isinstance(v, float) and not isinstance(v, bool):
+        return max(0, min(100, int(v)))
+    if isinstance(v, str):
+        s = v.strip()
+        if s.lstrip("-").isdigit():
+            return max(0, min(100, int(s)))
+    return default
+
+
+def _str_list_short(val: object, max_items: int, max_len: int) -> list[str]:
+    if not isinstance(val, list):
+        return []
+    out: list[str] = []
+    for item in val:
+        if not isinstance(item, str):
+            continue
+        t = " ".join(item.split()).strip()[:max_len]
+        if len(t) < 2:
+            continue
+        out.append(t)
+        if len(out) >= max_items:
+            break
+    return out
 
 
 def _extract_requirements_sections(job_description: str) -> tuple[str, bool]:
@@ -214,9 +292,41 @@ def _require_journal_collection():
 
 DEFAULT_TEMPLATE = _load_default_template()
 
+
+def _gateway_configured() -> bool:
+    return bool(settings.ai_gateway_api_key.strip())
+
+
+def _require_gateway() -> None:
+    if not _gateway_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI_GATEWAY_API_KEY is not set on the server. "
+                "Add it to backend/.env — see https://vercel.com/docs/ai-gateway"
+            ),
+        )
+
+
+def _gateway_client() -> OpenAI:
+    base = settings.ai_gateway_base_url.strip().rstrip("/")
+    return OpenAI(
+        api_key=settings.ai_gateway_api_key.strip(),
+        base_url=base,
+    )
+
+
+def _effective_model(override: str | None) -> str:
+    t = (override or "").strip()
+    if t:
+        return t
+    d = settings.ai_default_model.strip()
+    return d or "gpt-5.4"
+
+
 app = FastAPI(
     title="AI Assisted Apply API",
-    description="Tailor resume content to a job description using OpenAI.",
+    description="Tailor resume content via Vercel AI Gateway (OpenAI-compatible API).",
     version="0.1.0",
 )
 
@@ -232,6 +342,78 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/ai-status")
+def ai_status() -> dict[str, str | bool | list[str]]:
+    """Whether the gateway API key is set and which default model the server uses."""
+    ok = _gateway_configured()
+    return {
+        "configured": ok,
+        "mode": "gateway",
+        "default_model": settings.ai_default_model.strip() or "gpt-5.4",
+        "providers": ["gateway"] if ok else [],
+    }
+
+
+@app.get("/api/models")
+def list_gateway_models() -> dict[str, object]:
+    """Proxy gateway GET /v1/models — full catalog for the home page picker."""
+    default_model = settings.ai_default_model.strip() or "gpt-5.4"
+    if not _gateway_configured():
+        return {"items": [], "default_model": default_model}
+
+    base = settings.ai_gateway_base_url.strip().rstrip("/")
+    url = f"{base}/models"
+    try:
+        r = httpx.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {settings.ai_gateway_api_key.strip()}",
+                "Content-Type": "application/json",
+            },
+            timeout=60.0,
+        )
+        r.raise_for_status()
+        payload = r.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not list gateway models: {e!s}",
+        ) from e
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Invalid models response JSON: {e!s}",
+        ) from e
+
+    items: list[dict[str, str]] = []
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if isinstance(data, list):
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            mid = row.get("id")
+            if not isinstance(mid, str) or not mid.strip():
+                continue
+            mid = mid.strip()
+            prov = mid.split("/", 1)[0] if "/" in mid else "openai"
+            name = row.get("name")
+            if not isinstance(name, str) or not name.strip():
+                name = mid.split("/")[-1]
+            desc = row.get("description")
+            if not isinstance(desc, str):
+                desc = ""
+            items.append(
+                {
+                    "id": mid,
+                    "name": name.strip(),
+                    "provider": prov,
+                    "description": desc,
+                }
+            )
+
+    return {"items": items, "default_model": default_model}
 
 
 @app.get("/api/pdf-status")
@@ -262,14 +444,7 @@ def compile_pdf(body: CompilePdfRequest) -> Response:
 
 @app.post("/api/generate", response_model=GenerateResponse)
 def generate(body: GenerateRequest) -> GenerateResponse:
-    if not settings.openai_api_key.strip():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "OPENAI_API_KEY is not set on the server. "
-                "Add it to your environment or backend/.env — see README."
-            ),
-        )
+    _require_gateway()
 
     template_text = (
         DEFAULT_TEMPLATE if body.use_default_template else body.template.strip()
@@ -279,6 +454,8 @@ def generate(body: GenerateRequest) -> GenerateResponse:
             status_code=400,
             detail="Provide a custom LaTeX template or enable the default.",
         )
+
+    model_id = _effective_model(body.model)
 
     user_content = (
         "## Job description\n"
@@ -316,10 +493,10 @@ def generate(body: GenerateRequest) -> GenerateResponse:
             f"{body.additional_instructions.strip()}\n"
         )
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _gateway_client()
     try:
         completion = client.chat.completions.create(
-            model=settings.openai_model,
+            model=model_id,
             messages=[
                 {"role": "system", "content": body.ai_instructions.strip()},
                 {"role": "user", "content": user_content},
@@ -329,7 +506,7 @@ def generate(body: GenerateRequest) -> GenerateResponse:
     except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail=f"OpenAI request failed: {e!s}",
+            detail=f"AI Gateway request failed: {e!s}",
         ) from e
 
     choice = completion.choices[0]
@@ -343,9 +520,13 @@ def generate(body: GenerateRequest) -> GenerateResponse:
             lines = lines[:-1]
         latex = "\n".join(lines).strip()
 
+    used_model = getattr(completion, "model", None) or model_id
+    if not isinstance(used_model, str):
+        used_model = model_id
+
     return GenerateResponse(
         latex=latex,
-        model=settings.openai_model,
+        model=used_model,
     )
 
 
@@ -353,14 +534,9 @@ def generate(body: GenerateRequest) -> GenerateResponse:
 def generate_application_text(
     body: GenerateApplicationTextRequest,
 ) -> GenerateApplicationTextResponse:
-    if not settings.openai_api_key.strip():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "OPENAI_API_KEY is not set on the server. "
-                "Add it to your environment or backend/.env — see README."
-            ),
-        )
+    _require_gateway()
+
+    model_id = _effective_model(body.model)
 
     user_content = (
         "## Job description\n"
@@ -380,10 +556,10 @@ def generate_application_text(
         '"Cover letter" unless the format requires it.'
     )
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _gateway_client()
     try:
         completion = client.chat.completions.create(
-            model=settings.openai_model,
+            model=model_id,
             messages=[
                 {"role": "system", "content": APPLICATION_TEXT_SYSTEM},
                 {"role": "user", "content": user_content},
@@ -393,7 +569,7 @@ def generate_application_text(
     except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail=f"OpenAI request failed: {e!s}",
+            detail=f"AI Gateway request failed: {e!s}",
         ) from e
 
     choice = completion.choices[0]
@@ -406,22 +582,108 @@ def generate_application_text(
             lines = lines[:-1]
         text = "\n".join(lines).strip()
 
+    used_model = getattr(completion, "model", None) or model_id
+    if not isinstance(used_model, str):
+        used_model = model_id
+
     return GenerateApplicationTextResponse(
         text=text,
-        model=settings.openai_model,
+        model=used_model,
+    )
+
+
+@app.post("/api/compare-resume-job-match", response_model=CompareResumeJobMatchResponse)
+def compare_resume_job_match(body: CompareResumeJobMatchRequest) -> CompareResumeJobMatchResponse:
+    """Score JD alignment for original vs tailored resume (typically the smaller gateway model)."""
+    _require_gateway()
+    model_id = _effective_model(body.model)
+
+    jd = body.job_description.strip()[:28_000]
+    old_r = body.resume_original.strip()[:36_000]
+    new_tex = body.resume_new_latex.strip()[:52_000]
+    user_content = (
+        "## Job description\n"
+        f"{jd}\n\n"
+        "## OLD resume (plain text, before tailoring)\n"
+        f"{old_r}\n\n"
+        "## NEW resume (LaTeX tailored output — judge visible content only)\n"
+        f"{new_tex}\n"
+    )
+
+    client = _gateway_client()
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": MATCH_RESUME_JOB_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.2,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI Gateway request failed: {e!s}",
+        ) from e
+
+    raw = (completion.choices[0].message.content or "").strip()
+    try:
+        parsed = _parse_llm_json_object(raw)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not parse match analysis JSON: {e!s}",
+        ) from e
+
+    jm_o = _clamp_int_score(parsed.get("job_match_score_old"))
+    jm_n = _clamp_int_score(parsed.get("job_match_score_new"))
+    kw_o = _clamp_int_score(parsed.get("keywords_alignment_old"))
+    kw_n = _clamp_int_score(parsed.get("keywords_alignment_new"))
+    rf_o = _clamp_int_score(parsed.get("role_fit_old"))
+    rf_n = _clamp_int_score(parsed.get("role_fit_new"))
+    ev_o = _clamp_int_score(parsed.get("evidence_clarity_old"))
+    ev_n = _clamp_int_score(parsed.get("evidence_clarity_new"))
+
+    headline = parsed.get("headline", "")
+    if not isinstance(headline, str):
+        headline = ""
+    headline = headline.strip()[:400]
+
+    summary = parsed.get("summary", "")
+    if not isinstance(summary, str):
+        summary = ""
+    summary = summary.strip()[:2000]
+
+    what = _str_list_short(parsed.get("what_improved"), 6, 320)
+    watch = _str_list_short(parsed.get("still_watch"), 5, 320)
+
+    used_model = getattr(completion, "model", None) or model_id
+    if not isinstance(used_model, str):
+        used_model = model_id
+
+    return CompareResumeJobMatchResponse(
+        job_match_old=jm_o,
+        job_match_new=jm_n,
+        keywords_old=kw_o,
+        keywords_new=kw_n,
+        role_fit_old=rf_o,
+        role_fit_new=rf_n,
+        evidence_old=ev_o,
+        evidence_new=ev_n,
+        match_lift=jm_n - jm_o,
+        headline=headline,
+        summary=summary,
+        what_improved=what,
+        still_watch=watch,
+        model=used_model,
     )
 
 
 @app.post("/api/analyze-keyword-gaps", response_model=AnalyzeKeywordGapsResponse)
 def analyze_keyword_gaps(body: AnalyzeKeywordGapsRequest) -> AnalyzeKeywordGapsResponse:
-    if not settings.openai_api_key.strip():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "OPENAI_API_KEY is not set on the server. "
-                "Add it to your environment or backend/.env — see README."
-            ),
-        )
+    _require_gateway()
+
+    model_id = _effective_model(body.model)
 
     jd_for_analysis, used_subset = _extract_requirements_sections(body.job_description)
     source_label = "requirements/preferred sections only" if used_subset else "full job description (fallback)"
@@ -432,43 +694,39 @@ def analyze_keyword_gaps(body: AnalyzeKeywordGapsRequest) -> AnalyzeKeywordGapsR
         f"{body.resume.strip()}\n"
     )
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = _gateway_client()
     try:
         completion = client.chat.completions.create(
-            model=settings.openai_model,
+            model=model_id,
             messages=[
                 {"role": "system", "content": ANALYZE_KEYWORD_GAPS_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
             temperature=0.2,
-            response_format={"type": "json_object"},
         )
     except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail=f"OpenAI request failed: {e!s}",
+            detail=f"AI Gateway request failed: {e!s}",
         ) from e
 
     raw = (completion.choices[0].message.content or "").strip()
-    raw = _strip_llm_json_fence(raw)
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as e:
+        parsed = _parse_llm_json_object(raw)
+    except ValueError as e:
         raise HTTPException(
             status_code=502,
             detail=f"Could not parse keyword analysis JSON: {e!s}",
         ) from e
-    if not isinstance(parsed, dict):
-        raise HTTPException(
-            status_code=502,
-            detail="Keyword analysis response was not a JSON object.",
-        )
 
     missing, matched = _normalize_keyword_gap_lists(parsed)
+    used_model = getattr(completion, "model", None) or model_id
+    if not isinstance(used_model, str):
+        used_model = model_id
     return AnalyzeKeywordGapsResponse(
         missing_keywords=missing,
         matched_keywords=matched,
-        model=settings.openai_model,
+        model=used_model,
     )
 
 
